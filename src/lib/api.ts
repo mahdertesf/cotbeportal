@@ -82,12 +82,13 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
   console.log('Fetching all users');
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   // Simulate fetching all users. In a real app, this would come from your database.
+  // Ensure this data aligns with UserProfile for all roles
   return [
-    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Student', last_name: 'One', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
-    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Teacher', last_name: 'One', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
-    { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Staff', last_name: 'One', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
-    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Student', last_name: 'Two', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
-    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Student', last_name: 'Three', is_active: false, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
+    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
+    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
+    { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head" },
+    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Mechanical Engineering", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
+    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
   ];
 }
 
@@ -334,33 +335,37 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
   console.log('Fetching all student assessment scores for course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
 
-  // Mock: Assuming course 'sc10' has assessments 'asm-course10-1', 'asm-course10-2'
-  // And students 'stud1', 'stud2', 'stud3'
   const mockScores: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
 
   if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
-    // Assessments for this course (from fetchItems('assessments?courseId=sc10'))
-    // { id: 'asm-course1-1', name: 'Quiz 1 (CS101)', max_score: 20 } -> Let's use simplified IDs for mock
     const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
-    const students = ['stud1', 'stud2', 'stud3'];
+    const students = ['stud1', 'stud2', 'stud3']; // From fetchStudentRoster
 
     students.forEach(studentId => {
       mockScores[studentId] = {};
-      courseAssessments.forEach((asm: any) => { // Cast asm to any or proper type
-        // Simulate some scores, some missing
+      courseAssessments.forEach((asm: any) => {
         const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
+        let score: number | null = null;
+        let feedback: string | null = "Mock feedback.";
+
         if (studentId === 'stud1') { // stud1 has all scores
-          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * maxScore), feedback: "Good effort." };
-        } else if (studentId === 'stud2' && asm.id === courseAssessments[0]?.id) { 
-          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * maxScore), feedback: "Okay." };
-        } else if (studentId === 'stud2' && asm.id === courseAssessments[1]?.id) {
-            mockScores[studentId][asm.id] = { score: null, feedback: null }; // Explicitly missing
+          score = Math.floor(Math.random() * (maxScore * 0.8) + maxScore * 0.2); // Score between 20% and 100% of max
+        } else if (studentId === 'stud2') {
+          if (asm.id === (courseAssessments[0] as any)?.id) { // Score for first assessment
+             score = Math.floor(Math.random() * (maxScore * 0.7) + maxScore * 0.1); // Score between 10% and 80%
+          } else { // Missing score for other assessments for stud2
+            score = null;
+            feedback = null;
+          }
+        } else if (studentId === 'stud3') { // stud3 has varied scores, some missing
+           if (asm.id === (courseAssessments[0] as any)?.id) {
+             score = Math.floor(Math.random() * (maxScore * 0.5)); // Lower score for first assessment
+           } else {
+             score = null; // Missing for others
+             feedback = null;
+           }
         }
-        if (studentId === 'stud3' && asm.id === courseAssessments[0]?.id) {
-            mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * maxScore * 0.5), feedback: "Needs improvement." };
-        } else if (studentId === 'stud3' && asm.id === courseAssessments[1]?.id) {
-             mockScores[studentId][asm.id] = { score: null, feedback: null };
-        }
+        mockScores[studentId][asm.id] = { score, feedback };
       });
     });
   }
@@ -376,18 +381,18 @@ export async function fetchItems(entity: string, filters?: any) {
     return [{id: 'dept-1', name: 'Computer Science', description: 'CS Department'}, {id: 'dept-2', name: 'Mechanical Engineering', description: 'ME Department'}];
   }
   if (entity.startsWith('assessments?courseId=')) { 
-     // For 'sc10', 'sc11', 'sc12'
     const courseId = entity.split('=')[1];
-    if (courseId === 'sc10' || courseId === 'sc11' || courseId === 'sc12') {
+    if (courseId === 'sc10' || courseId === 'sc11' || courseId === 'sc12') { // Example course IDs
         return [
-            { id: 'asmMock1', scheduledCourseId: courseId, name: 'Quiz 1', description: 'Covers week 1-3.', max_score: 20, due_date: '2024-09-15', type: 'Quiz' },
-            { id: 'asmMock2', scheduledCourseId: courseId, name: 'Midterm Project', description: 'Practical application.', max_score: 30, due_date: '2024-10-15', type: 'Project' },
+            { id: `asm-${courseId}-1`, scheduledCourseId: courseId, name: `Quiz 1 (${courseId})`, description: 'Covers week 1-3.', max_score: 20, due_date: '2024-09-15T23:59:00Z', type: 'Quiz' },
+            { id: `asm-${courseId}-2`, scheduledCourseId: courseId, name: `Midterm Project (${courseId})`, description: 'Practical application.', max_score: 30, due_date: '2024-10-15T23:59:00Z', type: 'Project' },
+            { id: `asm-${courseId}-3`, scheduledCourseId: courseId, name: `Final Exam (${courseId})`, description: 'Comprehensive final.', max_score: 50, due_date: '2024-11-15T23:59:00Z', type: 'Exam' },
         ];
     }
     // Default for other courses
     return [
-        { id: 'asm-course1-1', name: 'Quiz 1 (Generic)', description: 'Basics', max_score: 20, due_date: '2024-08-15', type: 'Quiz' },
-        { id: 'asm-course1-2', name: 'Assignment 1 (Generic)', description: 'Looping', max_score: 50, due_date: '2024-08-30', type: 'Assignment' },
+        { id: 'asm-generic-1', scheduledCourseId: courseId, name: 'Generic Quiz 1', description: 'Basics', max_score: 20, due_date: '2024-08-15T23:59:00Z', type: 'Quiz' },
+        { id: 'asm-generic-2', scheduledCourseId: courseId, name: 'Generic Assignment 1', description: 'Looping', max_score: 50, due_date: '2024-08-30T23:59:00Z', type: 'Assignment' },
     ];
   }
   if (entity === 'scheduledCourses') { // For Staff Dashboard
@@ -407,6 +412,7 @@ export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string
   // Mock data: associate with students from fetchStudentRoster for consistency
   if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
     return [
+      // Example: Assume stud1 has a previously saved A, stud2 a B+, stud3 nothing
       { registration_id: `reg-${scheduledCourseId}-stud1`, student_id: 'stud1', final_grade: 'A', grade_points: 4.00 },
       { registration_id: `reg-${scheduledCourseId}-stud2`, student_id: 'stud2', final_grade: 'B+', grade_points: 3.30 },
       { registration_id: `reg-${scheduledCourseId}-stud3`, student_id: 'stud3', final_grade: null, grade_points: null },
@@ -419,17 +425,31 @@ export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return { success: true, data: { ...data, id: `${entity.slice(0,4)}-${Math.random()}` }};
+  if (entity === 'users') {
+    const newUser: UserProfile = {
+        user_id: `user-${Math.floor(Math.random() * 100000)}`,
+        is_active: true,
+        date_joined: new Date().toISOString(),
+        last_login: new Date().toISOString(),
+        ...data,
+    };
+    // Further tailor based on role if needed
+    return { success: true, data: newUser, error: null};
+  }
+  return { success: true, data: { ...data, id: `${entity.slice(0,4)}-${Math.random()}` }, error: null};
 }
 
 export async function updateItem(entity: string, id: string | number, data: any) {
   console.log(`Updating ${entity} ${id}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Simulate specific update for registrations
+  if (entity === 'users') {
+     const updatedUser: Partial<UserProfile> = { user_id: id, ...data };
+     return { success: true, data: updatedUser, error: null};
+  }
   if (entity === 'registrations') {
     console.log(`Mock DB: Registration ${id} updated with final_grade: ${data.final_grade}, grade_points: ${data.grade_points}`);
   }
-  return { success: true, data: { id, ...data }};
+  return { success: true, data: { id, ...data }, error: null};
 }
 
 export async function deleteItem(entity: string, id: string | number) {
@@ -441,9 +461,16 @@ export async function deleteItem(entity: string, id: string | number) {
 export async function fetchAuditLogs(filters?: any) {
     console.log('Fetching audit logs with filters:', filters);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return [
-        { id: 'log1', timestamp: new Date().toISOString(), username: 'staff1', action_type: 'USER_LOGIN', target_entity_type: 'USER', target_entity_id: 'staff1', ip_address: '192.168.1.10', details: 'User logged in successfully' },
-        { id: 'log2', timestamp: new Date(Date.now() - 60000).toISOString(), username: 'teacher1', action_type: 'COURSE_MATERIAL_UPLOAD', target_entity_type: 'COURSE_MATERIAL', target_entity_id: 'cm-123', ip_address: '10.0.0.5', details: 'Uploaded "Lecture 5.pdf" to EE305' },
+    const defaultLogs = [
+        { id: 'log1', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff.one', action_type: 'USER_LOGIN', target_entity_type: 'USER', target_entity_id: 'staff1', ip_address: '192.168.1.10', details: 'User logged in successfully' },
+        { id: 'log2', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'teacher.one', action_type: 'COURSE_MATERIAL_UPLOAD', target_entity_type: 'COURSE_MATERIAL', target_entity_id: 'cm-123', ip_address: '10.0.0.5', details: 'Uploaded "Lecture 5.pdf" to EE305' },
+        { id: 'log3', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'student.one', action_type: 'COURSE_REGISTRATION', target_entity_type: 'REGISTRATION', target_entity_id: 'reg-sc1-stud1', ip_address: '203.0.113.45', details: 'Registered for CS101' },
+        { id: 'log4', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff.one', action_type: 'USER_UPDATE', target_entity_type: 'USER', target_entity_id: 'stud3', ip_address: '192.168.1.10', details: 'Deactivated user student.three' },
+        { id: 'log5', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'teacher.one', action_type: 'ASSESSMENT_GRADE_UPDATE', target_entity_type: 'STUDENT_ASSESSMENT', target_entity_id: 'sa-stud1-asmMock1', ip_address: '10.0.0.5', details: 'Graded Quiz 1 for Abebe Bekele in EE305' },
     ];
+    const limit = filters?.limit || 50;
+    return defaultLogs.slice(0, limit);
 }
 
+
+    
