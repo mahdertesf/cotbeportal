@@ -12,6 +12,7 @@ import { getGeminiAcademicInsights } from '@/ai/flows/get-gemini-academic-insigh
 import { useToast } from '@/hooks/use-toast';
 import { BarChart3, Brain, Loader2, AlertTriangle, CalendarDays } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from "@/lib/utils";
 
 interface CourseRecord {
   course_code: string;
@@ -198,7 +199,14 @@ export default function AcademicHistoryPage() {
       >
         {history.academic_years.map((academicYear) => (
           <AccordionItem value={academicYear.year} key={academicYear.year} className="border rounded-lg shadow-md overflow-hidden">
-            <AccordionTrigger className="bg-primary/10 hover:bg-primary/20 px-4 py-3 rounded-t-md font-semibold text-lg text-primary-foreground hover:text-primary-foreground data-[state=open]:bg-primary/20 data-[state=open]:rounded-b-none">
+            <AccordionTrigger 
+              className={cn(
+                "px-4 py-3 rounded-t-md font-semibold text-lg data-[state=open]:rounded-b-none", // Common styles
+                academicYear.year === "Academic Year 2022-2023"
+                  ? "bg-accent/30 text-accent-foreground hover:bg-accent/40 data-[state=open]:bg-accent/40" // Specific year styling
+                  : "bg-primary/10 text-primary-foreground hover:bg-primary/20 data-[state=open]:bg-primary/20" // Default styling
+              )}
+            >
               {academicYear.year}
             </AccordionTrigger>
             <AccordionContent className="pt-0">
