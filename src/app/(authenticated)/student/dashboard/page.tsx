@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -20,6 +21,8 @@ interface Course {
 interface Assessment {
   assessment_id: string;
   name: string;
+  score?: number | null; // Added to reflect usage in filter
+  unique_key_for_list?: string; // Added for unique key generation
   // Add due_date if available from API
 }
 
@@ -38,12 +41,19 @@ export default function StudentDashboardPage() {
           const courses = await fetchStudentRegisteredCourses(user.user_id);
           setCurrentCourses(courses.filter(c => c.status === 'Registered').slice(0, 3)); // Show 3 courses
 
-          // Mock fetching assessments for all registered courses - this would be more complex in reality
-          const assessmentsPromises = courses.filter(c => c.status === 'Registered').map(course => 
-            fetchStudentAssessments(course.scheduledCourseId, user.user_id)
+          // Fetch assessments and create unique keys
+          const registeredCourses = courses.filter(c => c.status === 'Registered');
+          const assessmentsPromises = registeredCourses.map(course =>
+            fetchStudentAssessments(course.scheduledCourseId, user.user_id).then(assessments =>
+              assessments.map(asm => ({
+                ...asm,
+                unique_key_for_list: `${course.scheduledCourseId}_${asm.assessment_id}` // Ensure unique key
+              }))
+            )
           );
           const allAssessmentsNested = await Promise.all(assessmentsPromises);
           const allAssessments = allAssessmentsNested.flat();
+          
           // Filter for upcoming (mock: show first 3 non-graded assessments)
           setUpcomingAssessments(allAssessments.filter(a => a.score === null).slice(0,3));
 
@@ -120,7 +130,7 @@ export default function StudentDashboardPage() {
             ) : upcomingAssessments.length > 0 ? (
               <ul className="space-y-2">
                 {upcomingAssessments.map(assessment => (
-                  <li key={assessment.assessment_id} className="text-sm text-muted-foreground">
+                  <li key={assessment.unique_key_for_list || assessment.assessment_id} className="text-sm text-muted-foreground">
                     {assessment.name} - <span className="text-accent">Due Soon</span> {/* Add actual due date */}
                   </li>
                 ))}
