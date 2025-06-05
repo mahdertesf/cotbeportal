@@ -78,16 +78,32 @@ export async function handleResetPassword(token: string, newPassword_hash: strin
   return { success: false, error: 'Invalid token or password.' };
 }
 
+export async function handleChangePassword(userId: string | number, currentPassword_hash: string, newPassword_hash: string) {
+  console.log('Changing password for user:', userId);
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Simulate password change logic
+  // In a real app, you'd verify currentPassword_hash against the stored hash
+  if (currentPassword_hash === "wrong_password") { // Simple mock check
+    return { success: false, error: 'Incorrect current password.' };
+  }
+  if (newPassword_hash.length < 6) {
+    return { success: false, error: 'New password must be at least 6 characters long.' };
+  }
+  // Simulate successful password update
+  return { success: true, message: 'Password changed successfully.' };
+}
+
+
 // --- User Management (Staff) ---
 export async function fetchAllUsers(): Promise<UserProfile[]> {
   console.log('Fetching all users');
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   return [
-    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
-    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
+    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-cs', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
+    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-ee', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
     { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100" },
-    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Mechanical Engineering", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
-    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
+    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-me', department_name: "Mechanical Engineering", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
+    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-ce', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
   ];
 }
 
@@ -201,8 +217,17 @@ export async function fetchAcademicHistory(studentId: string | number) {
   const totalCreditsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.credits, 0);
   const totalGradePointsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.grade_points, 0);
   const gpaSem1Year2 = totalCreditsSem1Year2 > 0 ? totalGradePointsSem1Year2 / totalCreditsSem1Year2 : 0;
-  
-  const allCourses = [...coursesSem1Year1, ...coursesSem2Year1, ...coursesSem1Year2];
+
+   const coursesSem2Year2 = [
+    { course_code: 'MECH250', title: 'Thermodynamics', credits: 3, final_grade: 'B', grade_points: 9.0 },
+    { course_code: 'EE205', title: 'Digital Logic', credits: 3, final_grade: 'A-', grade_points: 11.1 },
+  ];
+  const totalCreditsSem2Year2 = coursesSem2Year2.reduce((sum, c) => sum + c.credits, 0);
+  const totalGradePointsSem2Year2 = coursesSem2Year2.reduce((sum, c) => sum + c.grade_points, 0);
+  const gpaSem2Year2 = totalCreditsSem2Year2 > 0 ? totalGradePointsSem2Year2 / totalCreditsSem2Year2 : 0;
+  const annualGPAYear2 = (totalCreditsSem1Year2 + totalCreditsSem2Year2) > 0 ? (totalGradePointsSem1Year2 + totalGradePointsSem2Year2) / (totalCreditsSem1Year2 + totalCreditsSem2Year2) : 0;
+
+  const allCourses = [...coursesSem1Year1, ...coursesSem2Year1, ...coursesSem1Year2, ...coursesSem2Year2];
   const totalCumulativeCredits = allCourses.reduce((sum, c) => sum + c.credits, 0);
   const totalCumulativeGradePoints = allCourses.reduce((sum, c) => sum + c.grade_points, 0);
   const cumulativeGPA = totalCumulativeCredits > 0 ? totalCumulativeGradePoints / totalCumulativeCredits : 0;
@@ -232,8 +257,14 @@ export async function fetchAcademicHistory(studentId: string | number) {
             name: "Semester One" as const,
             courses: coursesSem1Year2,
             semesterGPA: gpaSem1Year2,
+          },
+          {
+            name: "Semester Two" as const,
+            courses: coursesSem2Year2,
+            semesterGPA: gpaSem2Year2,
           }
         ],
+        annualGPA: annualGPAYear2,
       }
     ],
     cumulativeGPA: cumulativeGPA,
@@ -499,3 +530,4 @@ export async function fetchAuditLogs(filters?: any) {
 
 
     
+

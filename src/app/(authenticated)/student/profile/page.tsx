@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,10 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { fetchStudentProfile, updateStudentProfile } from '@/lib/api'; // Mock API calls
-import { Loader2, Edit3, Save } from 'lucide-react';
+import { fetchStudentProfile, updateStudentProfile, handleChangePassword } from '@/lib/api'; // Mock API calls
+import { Loader2, Edit3, Save, KeyRound } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const passwordFormSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+  confirmNewPassword: z.string().min(1, "Please confirm your new password"),
+}).refine(data => data.newPassword === data.confirmNewPassword, {
+  message: "New passwords don't match",
+  path: ["confirmNewPassword"],
+});
+
+type PasswordFormData = z.infer<typeof passwordFormSchema>;
 
 export default function StudentProfilePage() {
   const storeUser = useAppStore((state) => state.user);
@@ -20,6 +36,17 @@ export default function StudentProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const passwordForm = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordFormSchema),
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmNewPassword: '',
+    },
+  });
 
   useEffect(() => {
     if (storeUser?.user_id) {
@@ -59,13 +86,32 @@ export default function StudentProfilePage() {
         toast({ title: "Success", description: "Profile updated successfully." });
         setIsEditing(false);
       } else {
-        toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
+        toast({ title: "Error", description: response.error || "Failed to update profile.", variant: "destructive" });
       }
     } catch (error) {
       console.error("Failed to save profile", error);
       toast({ title: "Error", description: "An error occurred while saving.", variant: "destructive" });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const onPasswordChangeSubmit = async (data: PasswordFormData) => {
+    if (!storeUser?.user_id) return;
+    setIsChangingPassword(true);
+    try {
+      const response = await handleChangePassword(storeUser.user_id, data.currentPassword, data.newPassword);
+      if (response.success) {
+        toast({ title: "Success", description: response.message });
+        setIsPasswordDialogOpen(false);
+        passwordForm.reset();
+      } else {
+        toast({ title: "Password Change Failed", description: response.error, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "An error occurred while changing password.", variant: "destructive" });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
   
@@ -100,10 +146,10 @@ export default function StudentProfilePage() {
     );
   }
   
-  const ProfileField = ({ label, value, name, isEditing, onChange, type = "text", placeholder }: { label: string, value?: string | number, name: keyof UserProfile, isEditing: boolean, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, type?: string, placeholder?: string }) => (
+  const ProfileField = ({ label, value, name, isEditingThisField, onChange, type = "text", placeholder }: { label: string, value?: string | number, name: keyof UserProfile, isEditingThisField: boolean, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, type?: string, placeholder?: string }) => (
     <div className="space-y-1">
       <Label htmlFor={name} className="text-sm font-medium text-muted-foreground">{label}</Label>
-      {isEditing && (name === 'phone_number' || name === 'address' || name === 'email') ? (
+      {isEditingThisField && (name === 'phone_number' || name === 'address' || name === 'email') ? (
         <Input id={name} name={name} type={type} value={value || ''} onChange={onChange} placeholder={placeholder || `Enter ${label.toLowerCase()}`} />
       ) : (
         <p className="text-sm h-9 flex items-center px-3 py-2 rounded-md border border-transparent bg-muted/50">
@@ -115,56 +161,100 @@ export default function StudentProfilePage() {
 
 
   return (
-    <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-            <div>
-                <CardTitle className="font-headline">My CoTBE Profile</CardTitle>
-                <CardDescription>View and manage your personal information.</CardDescription>
-            </div>
-            {!isEditing && (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                    <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
-                </Button>
-            )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ProfileField label="First Name" name="first_name" value={profileData.first_name} isEditing={false} onChange={handleInputChange} />
-            <ProfileField label="Last Name" name="last_name" value={profileData.last_name} isEditing={false} onChange={handleInputChange} />
-        </div>
-        <ProfileField label="Username" name="username" value={profileData.username} isEditing={false} onChange={handleInputChange} />
-        <ProfileField label="Email Address" name="email" value={profileData.email} isEditing={isEditing} onChange={handleInputChange} type="email" placeholder="you@example.com" />
-        <ProfileField label="Phone Number" name="phone_number" value={profileData.phone_number} isEditing={isEditing} onChange={handleInputChange} placeholder="e.g. 0912345678" />
-        <ProfileField label="Address" name="address" value={profileData.address} isEditing={isEditing} onChange={handleInputChange} placeholder="Your current address" />
+    <>
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+              <div>
+                  <CardTitle className="font-headline">My CoTBE Profile</CardTitle>
+                  <CardDescription>View and manage your personal information.</CardDescription>
+              </div>
+              {!isEditing && (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                      <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
+                  </Button>
+              )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ProfileField label="First Name" name="first_name" value={profileData.first_name} isEditingThisField={false} onChange={handleInputChange} />
+              <ProfileField label="Last Name" name="last_name" value={profileData.last_name} isEditingThisField={false} onChange={handleInputChange} />
+          </div>
+          <ProfileField label="Username" name="username" value={profileData.username} isEditingThisField={false} onChange={handleInputChange} />
+          <ProfileField label="Email Address" name="email" value={profileData.email} isEditingThisField={isEditing} onChange={handleInputChange} type="email" placeholder="you@example.com" />
+          <ProfileField label="Phone Number" name="phone_number" value={profileData.phone_number} isEditingThisField={isEditing} onChange={handleInputChange} placeholder="e.g. 0912345678" />
+          <ProfileField label="Address" name="address" value={profileData.address} isEditingThisField={isEditing} onChange={handleInputChange} placeholder="Your current address" />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ProfileField label="Department" name="department_name" value={profileData.department_name} isEditingThisField={false} onChange={handleInputChange} />
+              <ProfileField label="Enrollment Date" name="enrollment_date" value={profileData.enrollment_date ? new Date(profileData.enrollment_date).toLocaleDateString() : ''} isEditingThisField={false} onChange={handleInputChange} />
+          </div>
+          <ProfileField label="Date of Birth" name="date_of_birth" value={profileData.date_of_birth ? new Date(profileData.date_of_birth).toLocaleDateString() : ''} isEditingThisField={false} onChange={handleInputChange} />
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ProfileField label="Department" name="department_name" value={profileData.department_name} isEditing={false} onChange={handleInputChange} />
-            <ProfileField label="Enrollment Date" name="enrollment_date" value={profileData.enrollment_date ? new Date(profileData.enrollment_date).toLocaleDateString() : ''} isEditing={false} onChange={handleInputChange} />
-        </div>
-        <ProfileField label="Date of Birth" name="date_of_birth" value={profileData.date_of_birth ? new Date(profileData.date_of_birth).toLocaleDateString() : ''} isEditing={false} onChange={handleInputChange} />
-      
+          {isEditing && (
+              <div className="mt-2">
+                <Button variant="link" className="p-0 h-auto text-sm" onClick={() => setIsPasswordDialogOpen(true)}>
+                  <KeyRound className="mr-1 h-3 w-3" /> Change Password
+                </Button>
+                <p className="text-xs text-muted-foreground">Password changes are handled separately for security.</p>
+              </div>
+          )}
+        </CardContent>
         {isEditing && (
-            <div className="mt-2">
-              <Button variant="link" className="p-0 h-auto text-sm">Change Password</Button>
-               <p className="text-xs text-muted-foreground">Password changes are handled separately for security.</p>
-            </div>
+          <CardFooter className="flex justify-end space-x-2">
+            <Button variant="ghost" onClick={() => {
+              setIsEditing(false);
+              if (storeUser) setProfileData(storeUser); // Revert changes by restoring from store
+            }}>Cancel</Button>
+            <Button onClick={handleSaveChanges} disabled={isSaving}>
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save Changes
+            </Button>
+          </CardFooter>
         )}
-      </CardContent>
-      {isEditing && (
-        <CardFooter className="flex justify-end space-x-2">
-          <Button variant="ghost" onClick={() => {
-            setIsEditing(false);
-            // Optionally revert changes if not saved by re-fetching or using original storeUser data
-            if (storeUser) setProfileData(storeUser);
-          }}>Cancel</Button>
-          <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Changes
-          </Button>
-        </CardFooter>
-      )}
-    </Card>
+      </Card>
+
+      <Dialog open={isPasswordDialogOpen} onOpenChange={(open) => {
+        setIsPasswordDialogOpen(open);
+        if (!open) passwordForm.reset();
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Change Password</DialogTitle>
+            <DialogDescription>
+              Enter your current password and your new password below.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={passwordForm.handleSubmit(onPasswordChangeSubmit)} className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <Input id="currentPassword" type="password" {...passwordForm.register('currentPassword')} />
+              {passwordForm.formState.errors.currentPassword && <p className="text-sm text-destructive mt-1">{passwordForm.formState.errors.currentPassword.message}</p>}
+            </div>
+            <div>
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input id="newPassword" type="password" {...passwordForm.register('newPassword')} />
+              {passwordForm.formState.errors.newPassword && <p className="text-sm text-destructive mt-1">{passwordForm.formState.errors.newPassword.message}</p>}
+            </div>
+            <div>
+              <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+              <Input id="confirmNewPassword" type="password" {...passwordForm.register('confirmNewPassword')} />
+              {passwordForm.formState.errors.confirmNewPassword && <p className="text-sm text-destructive mt-1">{passwordForm.formState.errors.confirmNewPassword.message}</p>}
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" onClick={() => passwordForm.reset()}>Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={isChangingPassword}>
+                {isChangingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Change Password
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+

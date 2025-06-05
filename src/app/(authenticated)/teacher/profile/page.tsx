@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,10 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { fetchTeacherProfile, updateTeacherProfile } from '@/lib/api'; // Mock API calls
-import { Loader2, Edit3, Save } from 'lucide-react';
+import { fetchTeacherProfile, updateTeacherProfile, handleChangePassword } from '@/lib/api'; // Mock API calls
+import { Loader2, Edit3, Save, KeyRound } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const passwordFormSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+  confirmNewPassword: z.string().min(1, "Please confirm your new password"),
+}).refine(data => data.newPassword === data.confirmNewPassword, {
+  message: "New passwords don't match",
+  path: ["confirmNewPassword"],
+});
+
+type PasswordFormData = z.infer<typeof passwordFormSchema>;
 
 export default function TeacherProfilePage() {
   const storeUser = useAppStore((state) => state.user);
@@ -20,6 +36,17 @@ export default function TeacherProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const passwordForm = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordFormSchema),
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmNewPassword: '',
+    },
+  });
 
   useEffect(() => {
     if (storeUser?.user_id) {
@@ -59,13 +86,32 @@ export default function TeacherProfilePage() {
         toast({ title: "Success", description: "Profile updated successfully." });
         setIsEditing(false);
       } else {
-        toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
+        toast({ title: "Error", description: response.error || "Failed to update profile.", variant: "destructive" });
       }
     } catch (error) {
       console.error("Failed to save profile", error);
       toast({ title: "Error", description: "An error occurred while saving.", variant: "destructive" });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const onPasswordChangeSubmit = async (data: PasswordFormData) => {
+    if (!storeUser?.user_id) return;
+    setIsChangingPassword(true);
+    try {
+      const response = await handleChangePassword(storeUser.user_id, data.currentPassword, data.newPassword);
+      if (response.success) {
+        toast({ title: "Success", description: response.message });
+        setIsPasswordDialogOpen(false);
+        passwordForm.reset();
+      } else {
+        toast({ title: "Password Change Failed", description: response.error, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "An error occurred while changing password.", variant: "destructive" });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
   
@@ -112,51 +158,96 @@ export default function TeacherProfilePage() {
   );
 
   return (
-    <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-            <div>
-                <CardTitle className="font-headline">My CoTBE Profile</CardTitle>
-                <CardDescription>View and manage your personal and professional information.</CardDescription>
-            </div>
-            {!isEditing && (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                    <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
-                </Button>
-            )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ProfileField label="First Name" name="first_name" value={profileData.first_name} isEditingThisField={false} onChange={handleInputChange} />
-            <ProfileField label="Last Name" name="last_name" value={profileData.last_name} isEditingThisField={false} onChange={handleInputChange} />
-        </div>
-        <ProfileField label="Username" name="username" value={profileData.username} isEditingThisField={false} onChange={handleInputChange} />
-        <ProfileField label="Email Address" name="email" value={profileData.email} isEditingThisField={isEditing} onChange={handleInputChange} type="email" placeholder="you@example.com" />
-        <ProfileField label="Phone Number" name="phone_number" value={profileData.phone_number} isEditingThisField={isEditing} onChange={handleInputChange} placeholder="e.g. 0912345678" />
-        <ProfileField label="Office Location" name="office_location" value={profileData.office_location} isEditingThisField={isEditing} onChange={handleInputChange} placeholder="e.g. Building A, Room 101" />
+    <>
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+              <div>
+                  <CardTitle className="font-headline">My CoTBE Profile</CardTitle>
+                  <CardDescription>View and manage your personal and professional information.</CardDescription>
+              </div>
+              {!isEditing && (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                      <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
+                  </Button>
+              )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ProfileField label="First Name" name="first_name" value={profileData.first_name} isEditingThisField={false} onChange={handleInputChange} />
+              <ProfileField label="Last Name" name="last_name" value={profileData.last_name} isEditingThisField={false} onChange={handleInputChange} />
+          </div>
+          <ProfileField label="Username" name="username" value={profileData.username} isEditingThisField={false} onChange={handleInputChange} />
+          <ProfileField label="Email Address" name="email" value={profileData.email} isEditingThisField={isEditing} onChange={handleInputChange} type="email" placeholder="you@example.com" />
+          <ProfileField label="Phone Number" name="phone_number" value={profileData.phone_number} isEditingThisField={isEditing} onChange={handleInputChange} placeholder="e.g. 0912345678" />
+          <ProfileField label="Office Location" name="office_location" value={profileData.office_location} isEditingThisField={isEditing} onChange={handleInputChange} placeholder="e.g. Building A, Room 101" />
+          
+          <ProfileField label="Department" name="department_name" value={profileData.department_name} isEditingThisField={false} onChange={handleInputChange} />
         
-        <ProfileField label="Department" name="department_name" value={profileData.department_name} isEditingThisField={false} onChange={handleInputChange} />
-      
+          {isEditing && (
+              <div className="mt-2">
+                 <Button variant="link" className="p-0 h-auto text-sm" onClick={() => setIsPasswordDialogOpen(true)}>
+                  <KeyRound className="mr-1 h-3 w-3" /> Change Password
+                </Button>
+                <p className="text-xs text-muted-foreground">Password changes are handled separately for security.</p>
+              </div>
+          )}
+        </CardContent>
         {isEditing && (
-            <div className="mt-2">
-              <Button variant="link" className="p-0 h-auto text-sm">Change Password</Button>
-               <p className="text-xs text-muted-foreground">Password changes are handled separately for security.</p>
-            </div>
+          <CardFooter className="flex justify-end space-x-2">
+            <Button variant="ghost" onClick={() => {
+              setIsEditing(false);
+              if (storeUser) setProfileData(storeUser);
+            }}>Cancel</Button>
+            <Button onClick={handleSaveChanges} disabled={isSaving}>
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save Changes
+            </Button>
+          </CardFooter>
         )}
-      </CardContent>
-      {isEditing && (
-        <CardFooter className="flex justify-end space-x-2">
-          <Button variant="ghost" onClick={() => {
-            setIsEditing(false);
-            if (storeUser) setProfileData(storeUser);
-          }}>Cancel</Button>
-          <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Changes
-          </Button>
-        </CardFooter>
-      )}
-    </Card>
+      </Card>
+
+      <Dialog open={isPasswordDialogOpen} onOpenChange={(open) => {
+        setIsPasswordDialogOpen(open);
+        if (!open) passwordForm.reset();
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Change Password</DialogTitle>
+            <DialogDescription>
+              Enter your current password and your new password below.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={passwordForm.handleSubmit(onPasswordChangeSubmit)} className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <Input id="currentPassword" type="password" {...passwordForm.register('currentPassword')} />
+              {passwordForm.formState.errors.currentPassword && <p className="text-sm text-destructive mt-1">{passwordForm.formState.errors.currentPassword.message}</p>}
+            </div>
+            <div>
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input id="newPassword" type="password" {...passwordForm.register('newPassword')} />
+              {passwordForm.formState.errors.newPassword && <p className="text-sm text-destructive mt-1">{passwordForm.formState.errors.newPassword.message}</p>}
+            </div>
+            <div>
+              <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+              <Input id="confirmNewPassword" type="password" {...passwordForm.register('confirmNewPassword')} />
+              {passwordForm.formState.errors.confirmNewPassword && <p className="text-sm text-destructive mt-1">{passwordForm.formState.errors.confirmNewPassword.message}</p>}
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" onClick={() => passwordForm.reset()}>Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={isChangingPassword}>
+                {isChangingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Change Password
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
