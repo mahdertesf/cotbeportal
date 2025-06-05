@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { fetchAvailableCourses, handleRegisterCourse, fetchStudentRegisteredCourses, handleDropCourse, fetchItems } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Search, Filter, PlusCircle, MinusCircle, Info, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
@@ -43,7 +43,7 @@ interface Department {
   name: string;
 }
 
-const ALL_DEPARTMENTS_VALUE = "all"; // Define a constant for clarity
+const ALL_DEPARTMENTS_VALUE = "all";
 
 export default function CourseRegistrationPage() {
   const user = useAppStore(state => state.user);
@@ -51,9 +51,10 @@ export default function CourseRegistrationPage() {
   const [registeredCourses, setRegisteredCourses] = useState<RegisteredCourse[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedCourseDetails, setSelectedCourseDetails] = useState<Course | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState(''); // Initial value for placeholder
+  const [departmentFilter, setDepartmentFilter] = useState(ALL_DEPARTMENTS_VALUE);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [isLoadingRegistered, setIsLoadingRegistered] = useState(true);
   const [isRegistering, setIsRegistering] = useState<Record<string, boolean>>({});
@@ -90,19 +91,16 @@ export default function CourseRegistrationPage() {
   const handleRegister = async (courseId: string) => {
     setIsRegistering(prev => ({...prev, [courseId]: true }));
     try {
-      // Client-side checks (mock for now)
       const course = availableCourses.find(c => c.id === courseId);
       if (course && course.current_enrollment >= course.max_capacity) {
          toast({ title: "Registration Failed", description: "Course is full.", variant: "destructive" });
          setIsRegistering(prev => ({...prev, [courseId]: false }));
          return;
       }
-      // Add prerequisite checks, schedule conflicts here in real app.
 
       const response = await handleRegisterCourse(courseId);
       if (response.success) {
         toast({ title: "Success", description: response.message, className: "bg-green-500 text-white" });
-        // Refresh registered courses list
         if (user?.user_id) {
             const updatedRegistered = await fetchStudentRegisteredCourses(user.user_id);
             setRegisteredCourses(updatedRegistered);
@@ -123,7 +121,6 @@ export default function CourseRegistrationPage() {
       const response = await handleDropCourse(registrationId);
       if (response.success) {
         toast({ title: "Success", description: response.message, className: "bg-green-500 text-white" });
-        // Refresh registered courses list
          if (user?.user_id) {
             const updatedRegistered = await fetchStudentRegisteredCourses(user.user_id);
             setRegisteredCourses(updatedRegistered);
@@ -140,7 +137,7 @@ export default function CourseRegistrationPage() {
 
   const filteredCourses = availableCourses.filter(course => 
     (course.title.toLowerCase().includes(searchTerm.toLowerCase()) || course.course_code.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (!departmentFilter || departmentFilter === ALL_DEPARTMENTS_VALUE ? true : course.teacher_name.includes(departmentFilter)) // Adjusted filter logic
+    (departmentFilter === ALL_DEPARTMENTS_VALUE ? true : course.teacher_name.includes(departmentFilter))
   );
 
   const CourseRowSkeleton = () => (
@@ -215,13 +212,12 @@ export default function CourseRegistrationPage() {
                             <TableCell>{course.schedule}</TableCell>
                             <TableCell>{course.current_enrollment}/{course.max_capacity}</TableCell>
                             <TableCell className="space-x-1">
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" onClick={() => setSelectedCourseDetails(course)}>
-                                        <Info className="mr-1 h-4 w-4"/>Details
-                                    </Button>
-                                </DialogTrigger>
-                            </Dialog>
+                                <Button variant="outline" size="sm" onClick={() => {
+                                    setSelectedCourseDetails(course);
+                                    setIsDetailsModalOpen(true);
+                                }}>
+                                    <Info className="mr-1 h-4 w-4"/>Details
+                                </Button>
                             <Button size="sm" onClick={() => handleRegister(course.id)} disabled={isRegistering[course.id] || course.current_enrollment >= course.max_capacity || registeredCourses.some(rc => rc.scheduledCourseId === course.id)}>
                                 {isRegistering[course.id] ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-1 h-4 w-4" />}
                                 {registeredCourses.some(rc => rc.scheduledCourseId === course.id) ? "Registered" : "Register"}
@@ -290,34 +286,36 @@ export default function CourseRegistrationPage() {
         </TabsContent>
       </Tabs>
 
-      {selectedCourseDetails && (
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-headline">{selectedCourseDetails.course_code} - {selectedCourseDetails.title}</DialogTitle>
-            <DialogDescription>{selectedCourseDetails.description}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 text-sm py-4">
-            <p><strong>Credits:</strong> {selectedCourseDetails.credits}</p>
-            <p><strong>Teacher:</strong> {selectedCourseDetails.teacher_name}</p>
-            <p><strong>Room:</strong> {selectedCourseDetails.room_name}, Section: {selectedCourseDetails.section_number}</p>
-            <p><strong>Schedule:</strong> {selectedCourseDetails.schedule}</p>
-            <p><strong>Capacity:</strong> {selectedCourseDetails.current_enrollment} / {selectedCourseDetails.max_capacity}</p>
-            {selectedCourseDetails.prerequisites.length > 0 && (
-              <div>
-                <strong>Prerequisites:</strong>
-                <ul className="list-disc list-inside ml-4">
-                  {selectedCourseDetails.prerequisites.map(pr => <li key={pr}>{pr}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-                <Button type="button" variant="secondary">Close</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      )}
+      <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
+        {selectedCourseDetails && (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-headline">{selectedCourseDetails.course_code} - {selectedCourseDetails.title}</DialogTitle>
+              <DialogDescription>{selectedCourseDetails.description}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 text-sm py-4">
+              <p><strong>Credits:</strong> {selectedCourseDetails.credits}</p>
+              <p><strong>Teacher:</strong> {selectedCourseDetails.teacher_name}</p>
+              <p><strong>Room:</strong> {selectedCourseDetails.room_name}, Section: {selectedCourseDetails.section_number}</p>
+              <p><strong>Schedule:</strong> {selectedCourseDetails.schedule}</p>
+              <p><strong>Capacity:</strong> {selectedCourseDetails.current_enrollment} / {selectedCourseDetails.max_capacity}</p>
+              {selectedCourseDetails.prerequisites.length > 0 && (
+                <div>
+                  <strong>Prerequisites:</strong>
+                  <ul className="list-disc list-inside ml-4">
+                    {selectedCourseDetails.prerequisites.map(pr => <li key={pr}>{pr}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                  <Button type="button" variant="secondary">Close</Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }
