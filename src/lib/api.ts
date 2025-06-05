@@ -1,3 +1,4 @@
+
 // Placeholder API functions
 // These functions simulate backend calls and should be replaced with actual API calls.
 
@@ -157,26 +158,72 @@ export async function fetchStudentAssessments(scheduledCourseId: string, student
 export async function fetchAcademicHistory(studentId: string | number) {
   console.log('Fetching academic history for student:', studentId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  
+  // Calculate GPAs for mock data
+  const coursesSem1Year1 = [
+    { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 },
+    { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 },
+  ];
+  const totalCreditsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.credits, 0);
+  const totalGradePointsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.grade_points, 0);
+  const gpaSem1Year1 = totalGradePointsSem1Year1 / totalCreditsSem1Year1;
+
+  const coursesSem2Year1 = [
+    { course_code: 'CS201', title: 'Data Structures', credits: 3, final_grade: 'A-', grade_points: 11.1 },
+    { course_code: 'PHY101', title: 'Physics I', credits: 4, final_grade: 'B', grade_points: 12.0 },
+  ];
+  const totalCreditsSem2Year1 = coursesSem2Year1.reduce((sum, c) => sum + c.credits, 0);
+  const totalGradePointsSem2Year1 = coursesSem2Year1.reduce((sum, c) => sum + c.grade_points, 0);
+  const gpaSem2Year1 = totalGradePointsSem2Year1 / totalCreditsSem2Year1;
+  
+  const annualGPAYear1 = (totalGradePointsSem1Year1 + totalGradePointsSem2Year1) / (totalCreditsSem1Year1 + totalCreditsSem2Year1);
+
+  const coursesSem1Year2 = [
+    { course_code: 'EE202', title: 'Circuit Theory', credits: 3, final_grade: 'A', grade_points: 12.0 },
+    { course_code: 'STAT210', title: 'Probability & Statistics', credits: 3, final_grade: 'C+', grade_points: 6.9 },
+  ];
+  const totalCreditsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.credits, 0);
+  const totalGradePointsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.grade_points, 0);
+  const gpaSem1Year2 = totalGradePointsSem1Year2 / totalCreditsSem1Year2;
+  
+  // Cumulative GPA calculation
+  const allCourses = [...coursesSem1Year1, ...coursesSem2Year1, ...coursesSem1Year2];
+  const totalCumulativeCredits = allCourses.reduce((sum, c) => sum + c.credits, 0);
+  const totalCumulativeGradePoints = allCourses.reduce((sum, c) => sum + c.grade_points, 0);
+  const cumulativeGPA = totalCumulativeGradePoints / totalCumulativeCredits;
+
   return {
-    semesters: [
-      { 
-        name: 'Fall 2022', 
-        courses: [
-          { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 },
-          { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 },
+    academic_years: [
+      {
+        year: "Academic Year 2022-2023",
+        semesters: [
+          {
+            name: "Semester One" as const,
+            courses: coursesSem1Year1,
+            semesterGPA: gpaSem1Year1,
+          },
+          {
+            name: "Semester Two" as const,
+            courses: coursesSem2Year1,
+            semesterGPA: gpaSem2Year1,
+          },
         ],
-        semesterGPA: 3.60,
+        annualGPA: annualGPAYear1,
       },
-      { 
-        name: 'Spring 2023', 
-        courses: [
-          { course_code: 'CS201', title: 'Data Structures', credits: 3, final_grade: 'A-', grade_points: 11.1 },
-          { course_code: 'PHY101', title: 'Physics I', credits: 4, final_grade: 'B', grade_points: 12.0 },
+      {
+        year: "Academic Year 2023-2024",
+        semesters: [
+          {
+            name: "Semester One" as const,
+            courses: coursesSem1Year2,
+            semesterGPA: gpaSem1Year2,
+          }
+          // Semester Two might be ongoing or not yet available
         ],
-        semesterGPA: 3.30,
-      },
+        // annualGPA could be missing if year not complete
+      }
     ],
-    cumulativeGPA: 3.45,
+    cumulativeGPA: cumulativeGPA,
   };
 }
 
@@ -258,6 +305,12 @@ export async function fetchItems(entity: string, filters?: any) {
   if (entity === 'departments') {
     return [{id: 'dept-1', name: 'Computer Science', description: 'CS Department'}, {id: 'dept-2', name: 'Mechanical Engineering', description: 'ME Department'}];
   }
+  if (entity.startsWith('assessments?courseId=')) { // For TeacherCourseManagementPage
+    return [
+        { id: 'asm-course1-1', name: 'Quiz 1 (CS101)', description: 'Basics of Python', max_score: 20, due_date: '2024-08-15', type: 'Quiz' },
+        { id: 'asm-course1-2', name: 'Assignment 1 (CS101)', description: 'Looping constructs', max_score: 50, due_date: '2024-08-30', type: 'Assignment' },
+    ];
+  }
   return [];
 }
 
@@ -287,3 +340,4 @@ export async function fetchAuditLogs(filters?: any) {
         { id: 'log2', timestamp: new Date(Date.now() - 60000).toISOString(), username: 'teacher1', action_type: 'COURSE_MATERIAL_UPLOAD', target_entity_type: 'COURSE_MATERIAL', target_entity_id: 'cm-123', ip_address: '10.0.0.5', details: 'Uploaded "Lecture 5.pdf" to EE305' },
     ];
 }
+
