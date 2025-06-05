@@ -279,37 +279,79 @@ export async function createCourseMaterial(scheduledCourseId: string, materialDa
     return { success: true, data: { id: `cm-${Math.random()}`, ...materialData } };
 }
 
-export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; final_grade: string | null; grade_points: number | null }>> {
-  console.log('Fetching final grades for course:', scheduledCourseId);
+// Used by TeacherCourseManagementPage - FinalGradesSubmission
+export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{
+  registration_id: string;
+  student_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  current_final_grade: string | null;
+  current_grade_points: number | null;
+}>> {
+  console.log('Fetching student registrations for grading, course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Mock data: associate with students from fetchStudentRoster for consistency
+  // This should ideally fetch from registrations table and join with student names
+  // For mock, let's use the student roster and add registration details
+  const roster = await fetchStudentRoster(scheduledCourseId); // student_id, first_name, last_name, email
+  const existingFinalGrades = await fetchStudentFinalGradesForCourse(scheduledCourseId); // registration_id, student_id, final_grade, grade_points
+
+  return roster.map(student => {
+    const finalGradeInfo = existingFinalGrades.find(fg => fg.student_id === student.student_id);
+    return {
+      registration_id: finalGradeInfo?.registration_id || `reg-${scheduledCourseId}-${student.student_id}`, // Ensure a registration_id
+      student_id: student.student_id,
+      first_name: student.first_name,
+      last_name: student.last_name,
+      email: student.email,
+      current_final_grade: finalGradeInfo?.final_grade || null,
+      current_grade_points: finalGradeInfo?.grade_points || null,
+    };
+  });
+}
+
+// Used by TeacherCourseManagementPage - FinalGradesSubmission
+export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId: string): Promise<Record<string, Record<string, { score: number | null; feedback: string | null }>>> {
+  console.log('Fetching all student assessment scores for course:', scheduledCourseId);
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+
+  // Mock: Assuming course 'sc10' has assessments 'asm-course10-1', 'asm-course10-2'
+  // And students 'stud1', 'stud2', 'stud3'
+  const mockScores: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
+
   if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
-    return [
-      { registration_id: `reg-sc10-stud1`, student_id: 'stud1', final_grade: 'A', grade_points: 4.00 },
-      { registration_id: `reg-sc10-stud2`, student_id: 'stud2', final_grade: 'B+', grade_points: 3.30 },
-      { registration_id: `reg-sc10-stud3`, student_id: 'stud3', final_grade: null, grade_points: null }, // Kebede has no grade yet
-    ];
+    // Assessments for this course (from fetchItems('assessments?courseId=sc10'))
+    // { id: 'asm-course1-1', name: 'Quiz 1 (CS101)', max_score: 20 } -> Let's use simplified IDs for mock
+    const courseAssessments = [
+        { id: 'asmMock1', max_score: 20}, 
+        { id: 'asmMock2', max_score: 30}
+    ]; 
+    const students = ['stud1', 'stud2', 'stud3'];
+
+    students.forEach(studentId => {
+      mockScores[studentId] = {};
+      courseAssessments.forEach(asm => {
+        // Simulate some scores, some missing
+        if (studentId === 'stud1') { // stud1 has all scores
+          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * asm.max_score), feedback: "Good effort." };
+        } else if (studentId === 'stud2' && asm.id === 'asmMock1') { // stud2 missing score for asmMock2
+          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * asm.max_score), feedback: "Okay." };
+        } else if (studentId === 'stud2' && asm.id === 'asmMock2') {
+            mockScores[studentId][asm.id] = { score: null, feedback: null }; // Explicitly missing
+        }
+        // stud3 will be missing all scores by default unless explicitly added
+        // Let's give stud3 one score
+        if (studentId === 'stud3' && asm.id === 'asmMock1') {
+            mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * asm.max_score * 0.5), feedback: "Needs improvement." };
+        } else if (studentId === 'stud3' && asm.id === 'asmMock2') {
+             mockScores[studentId][asm.id] = { score: null, feedback: null };
+        }
+      });
+    });
   }
-  return [];
+  return mockScores;
 }
 
-
-// --- Staff Head ---
-export async function fetchAllUsers(filters?: any) {
-  console.log('Fetching all users with filters:', filters);
-  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return [
-    { user_id: 'user-1', username: 'student1', email: 'student1@cotbe.edu', role: 'Student', first_name: 'Alice', last_name: 'Wonder', is_active: true },
-    { user_id: 'user-2', username: 'teacher1', email: 'teacher1@cotbe.edu', role: 'Teacher', first_name: 'Bob', last_name: 'Marley', is_active: true },
-    { user_id: 'user-3', username: 'staff1', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Charlie', last_name: 'Chaplin', is_active: false },
-  ];
-}
-
-export async function createUser(userData: any) {
-  console.log('Creating user:', userData);
-  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return { success: true, data: { ...userData, user_id: `user-${Math.random()}` }};
-}
 
 // --- Generic CRUD placeholders ---
 export async function fetchItems(entity: string, filters?: any) {
@@ -319,9 +361,18 @@ export async function fetchItems(entity: string, filters?: any) {
     return [{id: 'dept-1', name: 'Computer Science', description: 'CS Department'}, {id: 'dept-2', name: 'Mechanical Engineering', description: 'ME Department'}];
   }
   if (entity.startsWith('assessments?courseId=')) { 
+     // For 'sc10', 'sc11', 'sc12'
+    const courseId = entity.split('=')[1];
+    if (courseId === 'sc10' || courseId === 'sc11' || courseId === 'sc12') {
+        return [
+            { id: 'asmMock1', scheduledCourseId: courseId, name: 'Quiz 1', description: 'Covers week 1-3.', max_score: 20, due_date: '2024-09-15', type: 'Quiz' },
+            { id: 'asmMock2', scheduledCourseId: courseId, name: 'Midterm Project', description: 'Practical application.', max_score: 30, due_date: '2024-10-15', type: 'Project' },
+        ];
+    }
+    // Default for other courses
     return [
-        { id: 'asm-course1-1', name: 'Quiz 1 (CS101)', description: 'Basics of Python', max_score: 20, due_date: '2024-08-15', type: 'Quiz' },
-        { id: 'asm-course1-2', name: 'Assignment 1 (CS101)', description: 'Looping constructs', max_score: 50, due_date: '2024-08-30', type: 'Assignment' },
+        { id: 'asm-course1-1', name: 'Quiz 1 (Generic)', description: 'Basics', max_score: 20, due_date: '2024-08-15', type: 'Quiz' },
+        { id: 'asm-course1-2', name: 'Assignment 1 (Generic)', description: 'Looping', max_score: 50, due_date: '2024-08-30', type: 'Assignment' },
     ];
   }
   if (entity === 'scheduledCourses') { // For Staff Dashboard
@@ -333,6 +384,22 @@ export async function fetchItems(entity: string, filters?: any) {
   }
   return [];
 }
+
+// Kept for fetching student's own old grades if needed, but FinalGradesSubmission uses fetchStudentRegistrationsForCourseGrading
+export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; final_grade: string | null; grade_points: number | null }>> {
+  console.log('Fetching final grades for course:', scheduledCourseId);
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Mock data: associate with students from fetchStudentRoster for consistency
+  if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
+    return [
+      { registration_id: `reg-${scheduledCourseId}-stud1`, student_id: 'stud1', final_grade: 'A', grade_points: 4.00 },
+      { registration_id: `reg-${scheduledCourseId}-stud2`, student_id: 'stud2', final_grade: 'B+', grade_points: 3.30 },
+      { registration_id: `reg-${scheduledCourseId}-stud3`, student_id: 'stud3', final_grade: null, grade_points: null },
+    ];
+  }
+  return [];
+}
+
 
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);

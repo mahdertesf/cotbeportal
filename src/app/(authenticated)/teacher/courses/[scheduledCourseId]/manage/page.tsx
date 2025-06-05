@@ -22,7 +22,8 @@ import {
   createItem as createAssessment, 
   updateItem as updateAssessment, 
   deleteItem as deleteAssessment,
-  fetchStudentFinalGradesForCourse, // New import
+  fetchStudentRegistrationsForCourseGrading, // New: Fetches student list with reg IDs and existing final grades
+  fetchAllStudentAssessmentScoresForCourse, // New: Fetches all raw scores for all students
   updateItem // Ensure updateItem is imported for saving final grades
 } from '@/lib/api'; 
 import { getGeminiAssessmentIdeas, getGeminiFeedbackSuggestions } from '@/ai/flows';
@@ -30,9 +31,9 @@ import { Users, BookOpen, ClipboardEdit, Percent, CheckSquare, Loader2, PlusCirc
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Types
-interface Student { student_id: string; first_name: string; last_name: string; email: string; }
+interface Student { student_id: string; first_name: string; last_name: string; email: string; } // From roster
 interface CourseMaterial { id: string; title: string; description: string; material_type: 'File' | 'Link'; file_path?: string | null; url?: string | null; }
-interface Assessment { id: string; name: string; description: string; max_score: number; due_date: string; type: string; }
+interface Assessment { id: string; name: string; description: string; max_score: number; due_date: string; type: string; scheduledCourseId?: string; } // scheduledCourseId added for consistency
 interface StudentAssessmentEntry { student_id: string; assessment_id: string; score: number | null; feedback: string | null; }
 interface ScheduledCourseDetails { scheduled_course_id: string; course_code: string; title: string; section: string;}
 
@@ -41,10 +42,11 @@ interface StudentFinalGradeEntry {
   student_id: string;
   first_name: string;
   last_name: string;
-  input_score: string; // Keep as string for input flexibility
+  status: 'Calculated' | 'PendingGrading' | 'Error' | 'NoAssessments';
+  calculated_numeric_score: number | null;
   calculated_letter_grade: string | null;
   calculated_grade_points: number | null;
-  original_letter_grade: string | null;
+  original_letter_grade: string | null; 
   original_grade_points: number | null;
   has_changed: boolean;
 }
@@ -145,7 +147,7 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
   const handleSaveAssessment = async () => {
     try {
       if(currentAssessment.id) {
-        await updateAssessment('assessments', currentAssessment.id, currentAssessment);
+        await updateAssessment('assessments', currentAssessment.id, {...currentAssessment, scheduledCourseId});
       } else {
         await createAssessment('assessments', {...currentAssessment, id: Date.now().toString(), scheduledCourseId }); 
       }
@@ -223,7 +225,8 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
         try {
             const assessmentData = await fetchAssessmentsForCourse(`assessments?courseId=${scheduledCourseId}`);
             setAssessments(assessmentData as Assessment[]);
-            // TODO: Fetch existing grades for all students and assessments. Initialize `grades` state.
+            // TODO: Fetch existing grades for all students and assessments from student_assessment_entries. Initialize `grades` state.
+            // For now, mock API `fetchAllStudentAssessmentScoresForCourse` handles this pattern for FinalGrades component
         } catch (e) { toast({title: "Error loading gradebook data", variant: "destructive"});}
         setIsLoading(false);
     }
@@ -252,6 +255,13 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
     } catch(e) { toast({title: "AI Feedback Error", variant: "destructive"});}
     setIsAiFeedbackLoading(false);
   };
+  
+  const handleSaveGrades = async () => {
+    toast({ title: "Mock Save", description: "Gradebook save functionality is conceptual for this mock." });
+    // In a real app: iterate `grades` state and call API to save each student_assessment_entry
+    // For example: await updateItem('student_assessment_entries', entry.id, { score, feedback }) or a batch update.
+  };
+
 
   if(isLoading) return <Skeleton className="h-80 w-full" />;
 
@@ -319,14 +329,15 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
           ))}
         </TableBody>
       </Table>
-      <Button>Save All Grades</Button>
+      <Button onClick={handleSaveGrades}>Save All Grades & Feedback</Button>
     </div>
   );
 };
 
 // Final Grades Submission Component
-const getGradeDetailsFromScore = (score: number | null): { letter_grade: string | null, grade_points: number | null } => {
-  if (score === null || isNaN(score) || score < 0 || score > 100) return { letter_grade: null, grade_points: null };
+const getGradeDetailsFromScore = (scoreOutOf100: number | null): { letter_grade: string | null, grade_points: number | null } => {
+  if (scoreOutOf100 === null || isNaN(scoreOutOf100) || scoreOutOf100 < 0 || scoreOutOf100 > 100) return { letter_grade: null, grade_points: null };
+  const score = Math.round(scoreOutOf100); // Ensure integer for comparison
   if (score >= 90) return { letter_grade: 'A', grade_points: 4.0 };
   if (score >= 85) return { letter_grade: 'A-', grade_points: 3.7 };
   if (score >= 80) return { letter_grade: 'B+', grade_points: 3.3 };
@@ -339,75 +350,82 @@ const getGradeDetailsFromScore = (score: number | null): { letter_grade: string 
   return { letter_grade: 'F', grade_points: 0.0 };
 };
 
-const FinalGradesSubmission = ({ scheduledCourseId, studentsRoster }: { scheduledCourseId: string, studentsRoster: Student[] }) => {
+const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: string }) => {
   const [gradeEntries, setGradeEntries] = useState<StudentFinalGradeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  const initializeGradeEntries = useCallback(async () => {
+  const calculateAndSetGradeEntries = useCallback(async () => {
     setIsLoading(true);
     try {
-      const finalGradesData = await fetchStudentFinalGradesForCourse(scheduledCourseId);
-      const entries = studentsRoster.map(student => {
-        const existingGrade = finalGradesData.find(g => g.student_id === student.student_id);
-        let inputScore = '';
-        // Attempt to derive score from grade - this is an approximation
-        if (existingGrade?.letter_grade) {
-            if (existingGrade.letter_grade === 'A') inputScore = '95';
-            else if (existingGrade.letter_grade === 'A-') inputScore = '87';
-            else if (existingGrade.letter_grade === 'B+') inputScore = '82';
-            else if (existingGrade.letter_grade === 'B') inputScore = '77';
-            // Add more as needed, or leave blank
-        }
+      const courseAssessments = await fetchAssessmentsForCourse(`assessments?courseId=${scheduledCourseId}`) as Assessment[];
+      const studentRegistrations = await fetchStudentRegistrationsForCourseGrading(scheduledCourseId);
+      const allStudentRawScores = await fetchAllStudentAssessmentScoresForCourse(scheduledCourseId);
+      
+      const courseTotalMaxScore = courseAssessments.reduce((sum, asm) => sum + (asm.max_score || 0), 0);
 
-        const { letter_grade: calculated_letter_grade, grade_points: calculated_grade_points } = getGradeDetailsFromScore(inputScore ? parseFloat(inputScore) : null);
+      const newGradeEntries = studentRegistrations.map(reg => {
+        let status: StudentFinalGradeEntry['status'] = 'PendingGrading';
+        let numericScore100: number | null = null;
+        let letter_grade: string | null = null;
+        let grade_points: number | null = null;
+
+        if (courseAssessments.length === 0) {
+          status = 'NoAssessments';
+        } else {
+          const studentScoresForCourse = allStudentRawScores[reg.student_id] || {};
+          const isFullyGraded = courseAssessments.every(asm => 
+            studentScoresForCourse[asm.id]?.score !== null && studentScoresForCourse[asm.id]?.score !== undefined
+          );
+
+          if (!isFullyGraded) {
+            status = 'PendingGrading';
+          } else if (courseTotalMaxScore === 0) {
+            status = 'Error'; // Assessments exist but no total points
+          } else {
+            const studentTotalRawScore = courseAssessments.reduce((sum, asm) => {
+              const scoreEntry = studentScoresForCourse[asm.id];
+              return sum + (scoreEntry?.score || 0);
+            }, 0);
+            
+            numericScore100 = Math.max(0, Math.min(100, (studentTotalRawScore / courseTotalMaxScore) * 100));
+            const gradeDetails = getGradeDetailsFromScore(numericScore100);
+            letter_grade = gradeDetails.letter_grade;
+            grade_points = gradeDetails.grade_points;
+            status = 'Calculated';
+          }
+        }
+        
+        const hasChanged = status === 'Calculated' && (letter_grade !== reg.current_final_grade || grade_points !== reg.current_grade_points);
 
         return {
-          registration_id: existingGrade?.registration_id || '', // This needs to be valid
-          student_id: student.student_id,
-          first_name: student.first_name,
-          last_name: student.last_name,
-          input_score: inputScore,
-          calculated_letter_grade: existingGrade?.final_grade || calculated_letter_grade, // Show stored if input is blank
-          calculated_grade_points: existingGrade?.grade_points || calculated_grade_points,
-          original_letter_grade: existingGrade?.final_grade || null,
-          original_grade_points: existingGrade?.grade_points || null,
-          has_changed: false,
+          registration_id: reg.registration_id,
+          student_id: reg.student_id,
+          first_name: reg.first_name,
+          last_name: reg.last_name,
+          status: status,
+          calculated_numeric_score: numericScore100,
+          calculated_letter_grade: letter_grade,
+          calculated_grade_points: grade_points,
+          original_letter_grade: reg.current_final_grade,
+          original_grade_points: reg.current_grade_points,
+          has_changed: hasChanged,
         };
       });
-      setGradeEntries(entries);
+      setGradeEntries(newGradeEntries);
+
     } catch (error) {
-      toast({ title: "Error", description: "Failed to load student grade data.", variant: "destructive" });
+      console.error("Error calculating grade entries:", error);
+      toast({ title: "Error", description: "Failed to calculate final grades.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [scheduledCourseId, studentsRoster, toast]);
+  }, [scheduledCourseId, toast]);
 
   useEffect(() => {
-    if (studentsRoster.length > 0) {
-      initializeGradeEntries();
-    }
-  }, [studentsRoster, initializeGradeEntries]);
-
-  const handleScoreChange = (student_id: string, score_str: string) => {
-    setGradeEntries(prevEntries =>
-      prevEntries.map(entry => {
-        if (entry.student_id === student_id) {
-          const score_num = score_str === '' ? null : parseFloat(score_str);
-          const { letter_grade, grade_points } = getGradeDetailsFromScore(score_num);
-          return {
-            ...entry,
-            input_score: score_str,
-            calculated_letter_grade: letter_grade,
-            calculated_grade_points: grade_points,
-            has_changed: true,
-          };
-        }
-        return entry;
-      })
-    );
-  };
+    calculateAndSetGradeEntries();
+  }, [calculateAndSetGradeEntries]);
 
   const handleSaveAllFinalGrades = async () => {
     setIsSaving(true);
@@ -415,13 +433,7 @@ const FinalGradesSubmission = ({ scheduledCourseId, studentsRoster }: { schedule
     let errorCount = 0;
 
     for (const entry of gradeEntries) {
-      if (entry.has_changed && entry.registration_id && entry.input_score !== '') { // Only save if changed, valid registration_id, and score is entered
-        const score_num = parseFloat(entry.input_score);
-        if (isNaN(score_num) || score_num < 0 || score_num > 100) {
-            toast({ title: `Invalid Score for ${entry.first_name}`, description: "Score must be between 0 and 100.", variant: "destructive"});
-            errorCount++;
-            continue;
-        }
+      if (entry.status === 'Calculated' && entry.has_changed) {
         try {
           await updateItem('registrations', entry.registration_id, {
             final_grade: entry.calculated_letter_grade,
@@ -430,64 +442,60 @@ const FinalGradesSubmission = ({ scheduledCourseId, studentsRoster }: { schedule
           successCount++;
         } catch (error) {
           errorCount++;
-          toast({ title: `Error Saving Grade for ${entry.first_name}`, description: "Could not save the grade.", variant: "destructive" });
+          toast({ title: `Error Saving for ${entry.first_name}`, description: "Could not save the grade.", variant: "destructive" });
         }
       }
     }
     setIsSaving(false);
     if (successCount > 0) {
-      toast({ title: "Grades Saved", description: `${successCount} student grade(s) saved successfully.` });
-      initializeGradeEntries(); // Refresh data
+      toast({ title: "Grades Saved", description: `${successCount} student grade(s) submitted successfully.` });
+      calculateAndSetGradeEntries(); // Refresh to show updated "original" grades and reset has_changed
     }
     if (errorCount > 0) {
       toast({ title: "Some Grades Not Saved", description: `${errorCount} student grade(s) had issues.`, variant: "destructive" });
     }
     if (successCount === 0 && errorCount === 0) {
-        toast({ title: "No Changes", description: "No grades were changed or needed saving."});
+        toast({ title: "No Changes", description: "No grades were changed or needed submission."});
     }
   };
 
-  if (isLoading) return <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading grade sheet...</p></div>;
-  if (!studentsRoster.length) return <p className="text-muted-foreground">No students in this course roster.</p>
-
+  if (isLoading) return <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Calculating final grades...</p></div>;
+  
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Enter a numerical score (0-100) for each student. The letter grade and grade points will be calculated automatically. Click "Save All Final Grades" to submit.</p>
+      <p className="text-sm text-muted-foreground">Final grades are calculated based on all assessments in the Gradebook. Ensure all assessments are graded for accurate calculation. Click "Submit All Calculated Grades" to save.</p>
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Student Name</TableHead>
-            <TableHead>Stored Grade</TableHead>
-            <TableHead className="w-1/4">Input Score (0-100)</TableHead>
-            <TableHead>New Letter Grade</TableHead>
-            <TableHead>New Grade Points</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Calculated Score (/100)</TableHead>
+            <TableHead>Calculated Letter Grade</TableHead>
+            <TableHead>Calculated Grade Points</TableHead>
+            <TableHead>Previously Saved Grade</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {gradeEntries.map(entry => (
-            <TableRow key={entry.student_id}>
+            <TableRow key={entry.registration_id}>
               <TableCell>{entry.first_name} {entry.last_name}</TableCell>
-              <TableCell>{entry.original_letter_grade || '--'}</TableCell>
               <TableCell>
-                <Input
-                  type="number"
-                  value={entry.input_score}
-                  onChange={(e) => handleScoreChange(entry.student_id, e.target.value)}
-                  placeholder="e.g. 85"
-                  min="0"
-                  max="100"
-                  className="w-full"
-                />
+                {entry.status === 'Calculated' && <span className="text-green-600">Calculated</span>}
+                {entry.status === 'PendingGrading' && <span className="text-yellow-600">Assessments Incomplete</span>}
+                {entry.status === 'Error' && <span className="text-red-600">Error in Calculation</span>}
+                {entry.status === 'NoAssessments' && <span className="text-gray-500">No Assessments</span>}
               </TableCell>
+              <TableCell>{entry.calculated_numeric_score !== null ? entry.calculated_numeric_score.toFixed(2) : '--'}</TableCell>
               <TableCell>{entry.calculated_letter_grade || '--'}</TableCell>
-              <TableCell>{entry.calculated_grade_points?.toFixed(2) || '--'}</TableCell>
+              <TableCell>{entry.calculated_grade_points !== null ? entry.calculated_grade_points.toFixed(2) : '--'}</TableCell>
+              <TableCell>{entry.original_letter_grade || 'N/A'}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-      <Button onClick={handleSaveAllFinalGrades} disabled={isSaving}>
+      <Button onClick={handleSaveAllFinalGrades} disabled={isSaving || gradeEntries.every(e => e.status !== 'Calculated' || !e.has_changed)}>
         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-        Save All Final Grades
+        Submit All Calculated Grades
       </Button>
     </div>
   );
@@ -499,7 +507,7 @@ export default function TeacherCourseManagementPage() {
   const scheduledCourseId = params.scheduledCourseId as string;
   const { toast } = useToast();
   const [courseDetails, setCourseDetails] = useState<ScheduledCourseDetails | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<Student[]>([]); // For Gradebook Roster
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -507,6 +515,7 @@ export default function TeacherCourseManagementPage() {
       const loadData = async () => {
         setIsLoading(true);
         try {
+          // Fetch course details
           const courses = await fetchTeacherAssignedCourses("teacherId_placeholder"); 
           const currentCourse = courses.find(c => c.scheduled_course_id === scheduledCourseId);
           if (currentCourse) {
@@ -514,9 +523,11 @@ export default function TeacherCourseManagementPage() {
           } else {
             toast({title: "Error", description: "Course not found.", variant: "destructive"});
           }
+          // Fetch student roster for the Gradebook component
           const roster = await fetchStudentRoster(scheduledCourseId);
           setStudents(roster);
         } catch (error) {
+          console.error("Error loading course management data:", error)
           toast({ title: "Error", description: "Failed to load course management data.", variant: "destructive" });
         } finally {
           setIsLoading(false);
@@ -577,10 +588,10 @@ export default function TeacherCourseManagementPage() {
           <Card>
             <CardHeader>
                 <CardTitle className="font-headline">Final Grades Submission</CardTitle>
-                <CardDescription>Enter and submit final course grades for students.</CardDescription>
+                <CardDescription>Calculated final grades based on all course assessments. Ensure all individual assessments are graded in the 'Gradebook' tab before submitting final grades.</CardDescription>
             </CardHeader>
             <CardContent>
-              <FinalGradesSubmission scheduledCourseId={scheduledCourseId} studentsRoster={students} />
+              <FinalGradesSubmission scheduledCourseId={scheduledCourseId} />
             </CardContent>
           </Card>
         </TabsContent>
