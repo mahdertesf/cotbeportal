@@ -159,7 +159,6 @@ export async function fetchAcademicHistory(studentId: string | number) {
   console.log('Fetching academic history for student:', studentId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   
-  // Calculate GPAs for mock data
   const coursesSem1Year1 = [
     { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 },
     { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 },
@@ -186,7 +185,6 @@ export async function fetchAcademicHistory(studentId: string | number) {
   const totalGradePointsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.grade_points, 0);
   const gpaSem1Year2 = totalGradePointsSem1Year2 / totalCreditsSem1Year2;
   
-  // Cumulative GPA calculation
   const allCourses = [...coursesSem1Year1, ...coursesSem2Year1, ...coursesSem1Year2];
   const totalCumulativeCredits = allCourses.reduce((sum, c) => sum + c.credits, 0);
   const totalCumulativeGradePoints = allCourses.reduce((sum, c) => sum + c.grade_points, 0);
@@ -218,9 +216,7 @@ export async function fetchAcademicHistory(studentId: string | number) {
             courses: coursesSem1Year2,
             semesterGPA: gpaSem1Year2,
           }
-          // Semester Two might be ongoing or not yet available
         ],
-        // annualGPA could be missing if year not complete
       }
     ],
     cumulativeGPA: cumulativeGPA,
@@ -263,13 +259,18 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
     ];
 }
 
-export async function fetchStudentRoster(scheduledCourseId: string) {
+export async function fetchStudentRoster(scheduledCourseId: string): Promise<Array<{ student_id: string; first_name: string; last_name: string; email: string; }>> {
     console.log('Fetching student roster for course:', scheduledCourseId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return [
-        { student_id: 'stud1', first_name: 'Abebe', last_name: 'Bekele', email: 'abebe@example.com' },
-        { student_id: 'stud2', first_name: 'Chaltu', last_name: 'Lemma', email: 'chaltu@example.com' },
-    ];
+    // Mock data based on a known scheduledCourseId, e.g. 'sc10' from fetchTeacherAssignedCourses
+    if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
+        return [
+            { student_id: 'stud1', first_name: 'Abebe', last_name: 'Bekele', email: 'abebe@example.com' },
+            { student_id: 'stud2', first_name: 'Chaltu', last_name: 'Lemma', email: 'chaltu@example.com' },
+            { student_id: 'stud3', first_name: 'Kebede', last_name: 'Tadesse', email: 'kebede@example.com' },
+        ];
+    }
+    return [];
 }
 
 export async function createCourseMaterial(scheduledCourseId: string, materialData: any) {
@@ -277,10 +278,23 @@ export async function createCourseMaterial(scheduledCourseId: string, materialDa
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
     return { success: true, data: { id: `cm-${Math.random()}`, ...materialData } };
 }
-// ... other Teacher API placeholders
+
+export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; final_grade: string | null; grade_points: number | null }>> {
+  console.log('Fetching final grades for course:', scheduledCourseId);
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Mock data: associate with students from fetchStudentRoster for consistency
+  if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
+    return [
+      { registration_id: `reg-sc10-stud1`, student_id: 'stud1', final_grade: 'A', grade_points: 4.00 },
+      { registration_id: `reg-sc10-stud2`, student_id: 'stud2', final_grade: 'B+', grade_points: 3.30 },
+      { registration_id: `reg-sc10-stud3`, student_id: 'stud3', final_grade: null, grade_points: null }, // Kebede has no grade yet
+    ];
+  }
+  return [];
+}
+
 
 // --- Staff Head ---
-// ... Staff Head API placeholders (CRUD operations for Users, Departments, Courses, etc.)
 export async function fetchAllUsers(filters?: any) {
   console.log('Fetching all users with filters:', filters);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
@@ -301,14 +315,20 @@ export async function createUser(userData: any) {
 export async function fetchItems(entity: string, filters?: any) {
   console.log(`Fetching ${entity} with filters:`, filters);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // This is a very generic mock. You'll need specific ones.
   if (entity === 'departments') {
     return [{id: 'dept-1', name: 'Computer Science', description: 'CS Department'}, {id: 'dept-2', name: 'Mechanical Engineering', description: 'ME Department'}];
   }
-  if (entity.startsWith('assessments?courseId=')) { // For TeacherCourseManagementPage
+  if (entity.startsWith('assessments?courseId=')) { 
     return [
         { id: 'asm-course1-1', name: 'Quiz 1 (CS101)', description: 'Basics of Python', max_score: 20, due_date: '2024-08-15', type: 'Quiz' },
         { id: 'asm-course1-2', name: 'Assignment 1 (CS101)', description: 'Looping constructs', max_score: 50, due_date: '2024-08-30', type: 'Assignment' },
+    ];
+  }
+  if (entity === 'scheduledCourses') { // For Staff Dashboard
+    return [
+        { id: 'sc1', course_code: 'CS101', title: 'Intro to Programming', current_enrollment: 45 },
+        { id: 'sc2', course_code: 'MA202', title: 'Calculus II', current_enrollment: 28 },
+        { id: 'sc10', course_code: 'EE305', title: 'Digital Logic Design', current_enrollment: 30 },
     ];
   }
   return [];
@@ -323,6 +343,10 @@ export async function createItem(entity: string, data: any) {
 export async function updateItem(entity: string, id: string | number, data: any) {
   console.log(`Updating ${entity} ${id}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Simulate specific update for registrations
+  if (entity === 'registrations') {
+    console.log(`Mock DB: Registration ${id} updated with final_grade: ${data.final_grade}, grade_points: ${data.grade_points}`);
+  }
   return { success: true, data: { id, ...data }};
 }
 
