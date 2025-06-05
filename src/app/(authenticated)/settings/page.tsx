@@ -2,8 +2,18 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import useAppStore from '@/stores/appStore';
+import useAppStore, { type UserRole } from '@/stores/appStore';
 import { Loader2 } from 'lucide-react';
+
+const getRoleBasePath = (role: UserRole | undefined): string => {
+  if (!role) return 'general';
+  switch (role) {
+    case 'Student': return 'student';
+    case 'Teacher': return 'teacher';
+    case 'Staff Head': return 'staff';
+    default: return 'general';
+  }
+};
 
 export default function SettingsRedirectPage() {
   const user = useAppStore((state) => state.user);
@@ -11,12 +21,16 @@ export default function SettingsRedirectPage() {
 
   useEffect(() => {
     if (user && user.role) {
+      const rolePath = getRoleBasePath(user.role);
       // For now, all roles might share a generic settings page, or redirect to profile
       // This can be expanded later for role-specific settings
-      const rolePath = user.role.toLowerCase().replace(/\s+/g, '');
       // Example: router.replace(`/${rolePath}/settings`);
       // For now, let's assume a general settings page or redirect to profile as fallback
-      router.replace(`/${rolePath}/profile`); // Or a dedicated /settings page if it exists
+      if (rolePath !== 'general') {
+        router.replace(`/${rolePath}/profile`); // Or a dedicated /settings page if it exists
+      } else {
+        router.replace('/login');
+      }
     } else if (!user) {
       router.replace('/login');
     }

@@ -51,6 +51,7 @@ export async function handleLogin(username: string, password_hash: string, role:
     mockUserData = {
       ...mockUserData,
       job_title: 'Head of Mock Operations',
+      phone_number: '0977654321',
     };
   }
   
@@ -81,12 +82,10 @@ export async function handleResetPassword(token: string, newPassword_hash: strin
 export async function fetchAllUsers(): Promise<UserProfile[]> {
   console.log('Fetching all users');
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Simulate fetching all users. In a real app, this would come from your database.
-  // Ensure this data aligns with UserProfile for all roles
   return [
     { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
     { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
-    { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head" },
+    { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100" },
     { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_name: "Mechanical Engineering", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
     { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
   ];
@@ -268,6 +267,32 @@ export async function updateTeacherProfile(userId: string | number, data: Partia
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
     return { success: true, data: { ...await fetchTeacherProfile(userId), ...data } };
 }
+
+// --- Staff Head ---
+export async function fetchStaffProfile(userId: string | number) {
+    console.log('Fetching staff profile for:', userId);
+    await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+    return {
+        user_id: userId,
+        username: 'teststaff',
+        email: 'teststaff@cotbe.edu',
+        first_name: 'Test',
+        last_name: 'Staff',
+        role: 'Staff Head',
+        job_title: 'Head of Administration',
+        phone_number: '0977654321',
+        is_active: true,
+        date_joined: new Date().toISOString(),
+        last_login: new Date().toISOString(),
+    } as UserProfile;
+}
+
+export async function updateStaffProfile(userId: string | number, data: Partial<UserProfile>) {
+    console.log('Updating staff profile for:', userId, 'with data:', data);
+    await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+    return { success: true, data: { ...await fetchStaffProfile(userId), ...data } };
+}
+
 
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
     console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);

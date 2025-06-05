@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import useAppStore from '@/stores/appStore';
+import useAppStore, { type UserRole } from '@/stores/appStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -11,6 +11,16 @@ import { GlobalHelpAssistant } from '@/components/GlobalHelpAssistant';
 import Link from 'next/link';
 import Image from 'next/image';
 import { LogOut, UserCircle, Settings } from 'lucide-react';
+
+const getRoleBasePath = (role: UserRole | undefined): string => {
+  if (!role) return 'general';
+  switch (role) {
+    case 'Student': return 'student';
+    case 'Teacher': return 'teacher';
+    case 'Staff Head': return 'staff';
+    default: return 'general';
+  }
+};
 
 export default function AuthenticatedLayout({
   children,
@@ -47,7 +57,7 @@ export default function AuthenticatedLayout({
     return `${first}${last}`.toUpperCase() || 'U';
   };
   
-  const userRolePath = user.role ? user.role.toLowerCase().replace(/\s+/g, '-') : 'general';
+  const userRolePath = getRoleBasePath(user.role);
 
   return (
     <SidebarProvider defaultOpen>

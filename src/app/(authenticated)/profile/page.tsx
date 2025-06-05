@@ -2,8 +2,18 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import useAppStore from '@/stores/appStore';
+import useAppStore, { type UserRole } from '@/stores/appStore';
 import { Loader2 } from 'lucide-react';
+
+const getRoleBasePath = (role: UserRole | undefined): string => {
+  if (!role) return 'general'; // Should not happen if user is defined
+  switch (role) {
+    case 'Student': return 'student';
+    case 'Teacher': return 'teacher';
+    case 'Staff Head': return 'staff';
+    default: return 'general';
+  }
+};
 
 export default function ProfileRedirectPage() {
   const user = useAppStore((state) => state.user);
@@ -11,8 +21,13 @@ export default function ProfileRedirectPage() {
 
   useEffect(() => {
     if (user && user.role) {
-      const rolePath = user.role.toLowerCase().replace(/\s+/g, '');
-      router.replace(`/${rolePath}/profile`);
+      const rolePath = getRoleBasePath(user.role);
+      if (rolePath !== 'general') {
+        router.replace(`/${rolePath}/profile`);
+      } else {
+        // Fallback for unrecognized role, though ideally this is handled at login
+        router.replace('/login');
+      }
     } else if (!user) {
       router.replace('/login');
     }
