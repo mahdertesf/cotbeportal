@@ -77,6 +77,21 @@ export async function handleResetPassword(token: string, newPassword_hash: strin
   return { success: false, error: 'Invalid token or password.' };
 }
 
+// --- User Management (Staff) ---
+export async function fetchAllUsers(): Promise<UserProfile[]> {
+  console.log('Fetching all users');
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Simulate fetching all users. In a real app, this would come from your database.
+  return [
+    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Student', last_name: 'One', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
+    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Teacher', last_name: 'One', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
+    { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Staff', last_name: 'One', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
+    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Student', last_name: 'Two', is_active: true, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
+    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Student', last_name: 'Three', is_active: false, date_joined: new Date().toISOString(), last_login: new Date().toISOString() },
+  ];
+}
+
+
 // --- Student ---
 export async function fetchStudentProfile(userId: string | number) {
   console.log('Fetching student profile for:', userId);
@@ -96,6 +111,8 @@ export async function fetchStudentProfile(userId: string | number) {
     address: '123 Main St, Addis Ababa',
     phone_number: '0911223344',
     is_active: true,
+    date_joined: new Date().toISOString(),
+    last_login: new Date().toISOString(),
   } as UserProfile;
 }
 
@@ -165,7 +182,7 @@ export async function fetchAcademicHistory(studentId: string | number) {
   ];
   const totalCreditsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.credits, 0);
   const totalGradePointsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.grade_points, 0);
-  const gpaSem1Year1 = totalGradePointsSem1Year1 / totalCreditsSem1Year1;
+  const gpaSem1Year1 = totalCreditsSem1Year1 > 0 ? totalGradePointsSem1Year1 / totalCreditsSem1Year1 : 0;
 
   const coursesSem2Year1 = [
     { course_code: 'CS201', title: 'Data Structures', credits: 3, final_grade: 'A-', grade_points: 11.1 },
@@ -173,9 +190,9 @@ export async function fetchAcademicHistory(studentId: string | number) {
   ];
   const totalCreditsSem2Year1 = coursesSem2Year1.reduce((sum, c) => sum + c.credits, 0);
   const totalGradePointsSem2Year1 = coursesSem2Year1.reduce((sum, c) => sum + c.grade_points, 0);
-  const gpaSem2Year1 = totalGradePointsSem2Year1 / totalCreditsSem2Year1;
+  const gpaSem2Year1 = totalCreditsSem2Year1 > 0 ? totalGradePointsSem2Year1 / totalCreditsSem2Year1 : 0;
   
-  const annualGPAYear1 = (totalGradePointsSem1Year1 + totalGradePointsSem2Year1) / (totalCreditsSem1Year1 + totalCreditsSem2Year1);
+  const annualGPAYear1 = (totalCreditsSem1Year1 + totalCreditsSem2Year1) > 0 ? (totalGradePointsSem1Year1 + totalGradePointsSem2Year1) / (totalCreditsSem1Year1 + totalCreditsSem2Year1) : 0;
 
   const coursesSem1Year2 = [
     { course_code: 'EE202', title: 'Circuit Theory', credits: 3, final_grade: 'A', grade_points: 12.0 },
@@ -183,12 +200,12 @@ export async function fetchAcademicHistory(studentId: string | number) {
   ];
   const totalCreditsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.credits, 0);
   const totalGradePointsSem1Year2 = coursesSem1Year2.reduce((sum, c) => sum + c.grade_points, 0);
-  const gpaSem1Year2 = totalGradePointsSem1Year2 / totalCreditsSem1Year2;
+  const gpaSem1Year2 = totalCreditsSem1Year2 > 0 ? totalGradePointsSem1Year2 / totalCreditsSem1Year2 : 0;
   
   const allCourses = [...coursesSem1Year1, ...coursesSem2Year1, ...coursesSem1Year2];
   const totalCumulativeCredits = allCourses.reduce((sum, c) => sum + c.credits, 0);
   const totalCumulativeGradePoints = allCourses.reduce((sum, c) => sum + c.grade_points, 0);
-  const cumulativeGPA = totalCumulativeGradePoints / totalCumulativeCredits;
+  const cumulativeGPA = totalCumulativeCredits > 0 ? totalCumulativeGradePoints / totalCumulativeCredits : 0;
 
   return {
     academic_years: [
@@ -240,6 +257,8 @@ export async function fetchTeacherProfile(userId: string | number) {
         office_location: 'Tech Building, Room 305',
         phone_number: '0912345679',
         is_active: true,
+        date_joined: new Date().toISOString(),
+        last_login: new Date().toISOString(),
     } as UserProfile;
 }
 
@@ -322,28 +341,24 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
   if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
     // Assessments for this course (from fetchItems('assessments?courseId=sc10'))
     // { id: 'asm-course1-1', name: 'Quiz 1 (CS101)', max_score: 20 } -> Let's use simplified IDs for mock
-    const courseAssessments = [
-        { id: 'asmMock1', max_score: 20}, 
-        { id: 'asmMock2', max_score: 30}
-    ]; 
+    const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
     const students = ['stud1', 'stud2', 'stud3'];
 
     students.forEach(studentId => {
       mockScores[studentId] = {};
-      courseAssessments.forEach(asm => {
+      courseAssessments.forEach((asm: any) => { // Cast asm to any or proper type
         // Simulate some scores, some missing
+        const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
         if (studentId === 'stud1') { // stud1 has all scores
-          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * asm.max_score), feedback: "Good effort." };
-        } else if (studentId === 'stud2' && asm.id === 'asmMock1') { // stud2 missing score for asmMock2
-          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * asm.max_score), feedback: "Okay." };
-        } else if (studentId === 'stud2' && asm.id === 'asmMock2') {
+          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * maxScore), feedback: "Good effort." };
+        } else if (studentId === 'stud2' && asm.id === courseAssessments[0]?.id) { 
+          mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * maxScore), feedback: "Okay." };
+        } else if (studentId === 'stud2' && asm.id === courseAssessments[1]?.id) {
             mockScores[studentId][asm.id] = { score: null, feedback: null }; // Explicitly missing
         }
-        // stud3 will be missing all scores by default unless explicitly added
-        // Let's give stud3 one score
-        if (studentId === 'stud3' && asm.id === 'asmMock1') {
-            mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * asm.max_score * 0.5), feedback: "Needs improvement." };
-        } else if (studentId === 'stud3' && asm.id === 'asmMock2') {
+        if (studentId === 'stud3' && asm.id === courseAssessments[0]?.id) {
+            mockScores[studentId][asm.id] = { score: Math.floor(Math.random() * maxScore * 0.5), feedback: "Needs improvement." };
+        } else if (studentId === 'stud3' && asm.id === courseAssessments[1]?.id) {
              mockScores[studentId][asm.id] = { score: null, feedback: null };
         }
       });
