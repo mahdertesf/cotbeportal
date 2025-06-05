@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -42,6 +43,8 @@ interface Department {
   name: string;
 }
 
+const ALL_DEPARTMENTS_VALUE = "all"; // Define a constant for clarity
+
 export default function CourseRegistrationPage() {
   const user = useAppStore(state => state.user);
   const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
@@ -50,7 +53,7 @@ export default function CourseRegistrationPage() {
   const [selectedCourseDetails, setSelectedCourseDetails] = useState<Course | null>(null);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState(''); // Initial value for placeholder
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [isLoadingRegistered, setIsLoadingRegistered] = useState(true);
   const [isRegistering, setIsRegistering] = useState<Record<string, boolean>>({});
@@ -91,6 +94,7 @@ export default function CourseRegistrationPage() {
       const course = availableCourses.find(c => c.id === courseId);
       if (course && course.current_enrollment >= course.max_capacity) {
          toast({ title: "Registration Failed", description: "Course is full.", variant: "destructive" });
+         setIsRegistering(prev => ({...prev, [courseId]: false }));
          return;
       }
       // Add prerequisite checks, schedule conflicts here in real app.
@@ -136,7 +140,7 @@ export default function CourseRegistrationPage() {
 
   const filteredCourses = availableCourses.filter(course => 
     (course.title.toLowerCase().includes(searchTerm.toLowerCase()) || course.course_code.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (departmentFilter ? course.teacher_name.includes(departmentFilter) : true) // Placeholder for department filter via course object
+    (!departmentFilter || departmentFilter === ALL_DEPARTMENTS_VALUE ? true : course.teacher_name.includes(departmentFilter)) // Adjusted filter logic
   );
 
   const CourseRowSkeleton = () => (
@@ -180,7 +184,7 @@ export default function CourseRegistrationPage() {
                                 <SelectValue placeholder="Filter by Department" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All Departments</SelectItem>
+                                <SelectItem value={ALL_DEPARTMENTS_VALUE}>All Departments</SelectItem>
                                 {departments.map(dept => <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
@@ -218,9 +222,9 @@ export default function CourseRegistrationPage() {
                                     </Button>
                                 </DialogTrigger>
                             </Dialog>
-                            <Button size="sm" onClick={() => handleRegister(course.id)} disabled={isRegistering[course.id] || course.current_enrollment >= course.max_capacity}>
+                            <Button size="sm" onClick={() => handleRegister(course.id)} disabled={isRegistering[course.id] || course.current_enrollment >= course.max_capacity || registeredCourses.some(rc => rc.scheduledCourseId === course.id)}>
                                 {isRegistering[course.id] ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-1 h-4 w-4" />}
-                                Register
+                                {registeredCourses.some(rc => rc.scheduledCourseId === course.id) ? "Registered" : "Register"}
                             </Button>
                             </TableCell>
                         </TableRow>
@@ -317,3 +321,4 @@ export default function CourseRegistrationPage() {
     </div>
   );
 }
+
