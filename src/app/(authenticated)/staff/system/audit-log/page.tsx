@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { DatePickerWithRange } from '@/components/ui/date-range-picker'; // Assuming this component exists or will be created
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchAuditLogs } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -25,23 +25,14 @@ interface AuditLogEntry {
   details: string | null;
 }
 
-// Placeholder for DatePickerWithRange if it's not already in your ui components
-// You might need to create this component based on ShadCN's examples if it's not there.
-// For now, I'll mock its presence. If it's missing, it will cause a new error.
-// You can replace it with separate date pickers or remove date filtering for now if needed.
-const DatePickerWithRangePlaceholder = ({ date, onDateChange }: { date?: DateRange, onDateChange: (range?: DateRange) => void }) => (
-    <Button variant="outline" onClick={() => console.log("Date picker clicked")}>
-        {date?.from ? (date.to ? `${date.from.toLocaleDateString()} - ${date.to.toLocaleDateString()}` : date.from.toLocaleDateString()) : "Pick a date range"}
-    </Button>
-);
-
+const ALL_ACTIONS_FILTER_VALUE = "all_action_types_filter"; // Unique value for "All Action Types"
 
 export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({
     userSearch: '',
-    actionType: '',
+    actionType: '', // Empty initially to show placeholder
     dateRange: undefined as DateRange | undefined,
   });
   const { toast } = useToast();
@@ -51,7 +42,7 @@ export default function AuditLogPage() {
       setIsLoading(true);
       try {
         // In a real app, pass filters to fetchAuditLogs
-        const data = await fetchAuditLogs({ limit: 50 }); // Fetch more logs for this page
+        const data = await fetchAuditLogs({ limit: 50 }); 
         setLogs(data);
       } catch (error) {
         toast({ title: "Error", description: "Failed to load audit logs.", variant: "destructive" });
@@ -74,7 +65,7 @@ export default function AuditLogPage() {
 
   const filteredLogs = logs.filter(log => {
     const matchesUser = filters.userSearch ? log.username?.toLowerCase().includes(filters.userSearch.toLowerCase()) : true;
-    const matchesAction = filters.actionType ? log.action_type === filters.actionType : true;
+    const matchesAction = !filters.actionType || filters.actionType === ALL_ACTIONS_FILTER_VALUE ? true : log.action_type === filters.actionType;
     // Date filtering would be more complex and typically handled server-side
     return matchesUser && matchesAction;
   });
@@ -119,7 +110,7 @@ export default function AuditLogPage() {
                     <SelectValue placeholder="All Action Types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Action Types</SelectItem>
+                    <SelectItem value={ALL_ACTIONS_FILTER_VALUE}>All Action Types</SelectItem>
                     <SelectItem value="USER_LOGIN">User Login</SelectItem>
                     <SelectItem value="COURSE_MATERIAL_UPLOAD">Material Upload</SelectItem>
                     <SelectItem value="USER_UPDATE">User Update</SelectItem>
@@ -129,8 +120,7 @@ export default function AuditLogPage() {
               </div>
               <div>
                  <label htmlFor="date-range-filter" className="block text-sm font-medium text-muted-foreground mb-1">Date Range</label>
-                 {/* Replace DatePickerWithRangePlaceholder with actual component if you have it */}
-                 <DatePickerWithRangePlaceholder date={filters.dateRange} onDateChange={(range) => handleFilterChange('dateRange', range)} />
+                 <DatePickerWithRange date={filters.dateRange} onDateChange={(range) => handleFilterChange('dateRange', range)} />
               </div>
                <Button onClick={applyFilters} className="md:col-start-3 lg:col-start-auto self-end">
                 <Filter className="mr-2 h-4 w-4" /> Apply Filters
@@ -186,64 +176,8 @@ export default function AuditLogPage() {
           ) : (
             <p className="text-center text-muted-foreground py-8">No audit logs found matching your criteria.</p>
           )}
-          {/* Add pagination if many logs */}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-// If DatePickerWithRange is not defined, you'll need to create it.
-// Example (very basic structure, actual component is more complex):
-// components/ui/date-range-picker.tsx
-// import React from "react"
-// import { CalendarIcon } from "lucide-react"
-// import { DateRange } from "react-day-picker"
-// import { cn } from "@/lib/utils"
-// import { Button } from "@/components/ui/button"
-// import { Calendar } from "@/components/ui/calendar"
-// import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-//
-// export function DatePickerWithRange({
-//   className,
-//   date,
-//   onDateChange, // Changed from onSelect to onDateChange to match usage
-// }: React.HTMLAttributes<HTMLDivElement> & { date?: DateRange, onDateChange: (range?: DateRange) => void }) {
-//   return (
-//     <div className={cn("grid gap-2", className)}>
-//       <Popover>
-//         <PopoverTrigger asChild>
-//           <Button
-//             id="date"
-//             variant={"outline"}
-//             className={cn(
-//               "w-[300px] justify-start text-left font-normal",
-//               !date && "text-muted-foreground"
-//             )}
-//           >
-//             <CalendarIcon className="mr-2 h-4 w-4" />
-//             {date?.from ? (
-//               date.to ? (
-//                 <>{date.from.toLocaleDateString()} - {date.to.toLocaleDateString()}</>
-//               ) : (
-//                 date.from.toLocaleDateString()
-//               )
-//             ) : (
-//               <span>Pick a date range</span>
-//             )}
-//           </Button>
-//         </PopoverTrigger>
-//         <PopoverContent className="w-auto p-0" align="start">
-//           <Calendar
-//             initialFocus
-//             mode="range"
-//             defaultMonth={date?.from}
-//             selected={date}
-//             onSelect={onDateChange} // Ensure onSelect updates the state via onDateChange
-//             numberOfMonths={2}
-//           />
-//         </PopoverContent>
-//       </Popover>
-//     </div>
-//   )
-// }
