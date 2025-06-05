@@ -140,7 +140,7 @@ export default function AcademicHistoryPage() {
 
   const renderAcademicYearSkeleton = (keySuffix: string) => (
     <AccordionItem value={`skel_ay_${keySuffix}`} className="border-b-0">
-        <AccordionTrigger className="bg-primary/10 hover:bg-primary/20 px-4 py-3 rounded-md font-semibold text-lg">
+        <AccordionTrigger className="bg-primary/20 hover:bg-primary/30 px-4 py-3 rounded-md font-semibold text-lg">
             <Skeleton className="h-6 w-1/2" />
         </AccordionTrigger>
         <AccordionContent className="pt-0 pl-4 pr-2 pb-2">
@@ -173,7 +173,7 @@ export default function AcademicHistoryPage() {
              <Card>
                 <CardHeader>
                     <CardTitle className="font-headline text-2xl flex items-center"><CalendarDays className="mr-3 h-7 w-7 text-primary"/> My CoTBE Academic History</CardTitle>
-                    <CardDescription>An unofficial view of your academic performance and transcript.</CardDescription>
+                    <CardDescription>An official view of your academic performance and transcript.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <p className="text-muted-foreground">No academic history found.</p>
@@ -188,7 +188,7 @@ export default function AcademicHistoryPage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline text-2xl flex items-center"><CalendarDays className="mr-3 h-7 w-7 text-primary"/> My CoTBE Academic History</CardTitle>
-          <CardDescription>An unofficial view of your academic performance and transcript.</CardDescription>
+          <CardDescription>An official view of your academic performance and transcript.</CardDescription>
         </CardHeader>
       </Card>
 
@@ -201,10 +201,8 @@ export default function AcademicHistoryPage() {
           <AccordionItem value={academicYear.year} key={academicYear.year} className="border rounded-lg shadow-md overflow-hidden">
             <AccordionTrigger 
               className={cn(
-                "px-4 py-3 rounded-t-md font-semibold text-lg data-[state=open]:rounded-b-none", // Common styles
-                academicYear.year === "Academic Year 2022-2023"
-                  ? "bg-accent/30 text-accent-foreground hover:bg-accent/40 data-[state=open]:bg-accent/40" // Specific year styling
-                  : "bg-primary/10 text-primary-foreground hover:bg-primary/20 data-[state=open]:bg-primary/20" // Default styling
+                "px-4 py-3 rounded-t-md font-semibold text-lg data-[state=open]:rounded-b-none",
+                "bg-primary/20 text-primary-foreground hover:bg-primary/30 data-[state=open]:bg-primary/30"
               )}
             >
               {academicYear.year}
