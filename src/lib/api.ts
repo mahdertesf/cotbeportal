@@ -474,8 +474,8 @@ export async function fetchItems(entity: string, filters?: any) {
   }
   if (entity === 'semesters') {
     return [
-      { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Semester One', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00:00', registration_end_date: '2024-08-30T17:00:00', add_drop_start_date: '2024-09-02T09:00:00', add_drop_end_date: '2024-09-09T17:00:00' },
-      { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Semester Two', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00:00', registration_end_date: '2025-01-10T17:00:00', add_drop_start_date: '2025-01-13T09:00:00', add_drop_end_date: '2025-01-20T17:00:00' },
+      { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Semester One', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00', registration_end_date: '2024-08-30T17:00', add_drop_start_date: '2024-09-02T09:00', add_drop_end_date: '2024-09-09T17:00' },
+      { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Semester Two', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00', registration_end_date: '2025-01-10T17:00', add_drop_start_date: '2025-01-13T09:00', add_drop_end_date: '2025-01-20T17:00' },
     ];
   }
    if (entity === 'buildings') {
@@ -484,6 +484,15 @@ export async function fetchItems(entity: string, filters?: any) {
       { id: 'bldg-2', name: 'Technology Hall', address: '2 Innovation Avenue, CoTBE Campus' },
       { id: 'bldg-3', name: 'Architecture Pavilion', address: '3 Design Street, CoTBE Campus' },
       { id: 'bldg-4', name: 'Research Complex Alpha', address: '4 Discovery Road, CoTBE Campus' },
+    ];
+  }
+   if (entity === 'rooms') {
+    return [
+      { id: 'room-1', building_id: 'bldg-1', room_number: '101', capacity: 50, type: 'Lecture Hall' },
+      { id: 'room-2', building_id: 'bldg-1', room_number: '102 Lab', capacity: 30, type: 'Computer Lab' },
+      { id: 'room-3', building_id: 'bldg-2', room_number: 'A205', capacity: 75, type: 'Lecture Hall' },
+      { id: 'room-4', building_id: 'bldg-3', room_number: 'Studio 1', capacity: 20, type: 'Design Studio' },
+      { id: 'room-5', building_id: 'bldg-2', room_number: 'B101', capacity: 40, type: 'Classroom' },
     ];
   }
   return [];
