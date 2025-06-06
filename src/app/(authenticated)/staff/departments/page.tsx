@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { fetchItems, createItem, updateItem, deleteItem } from '@/lib/api';
 import { Loader2, PlusCircle, Edit, Trash2, Search } from 'lucide-react';
@@ -201,11 +201,9 @@ export default function DepartmentManagementPage() {
                       <Button variant="outline" size="sm" onClick={() => handleOpenDialog(dept)}>
                         <Edit className="mr-1 h-4 w-4" /> Edit
                       </Button>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" onClick={() => setDepartmentToDelete(dept)}>
-                          <Trash2 className="mr-1 h-4 w-4" /> Delete
-                        </Button>
-                      </AlertDialogTrigger>
+                      <Button variant="destructive" size="sm" onClick={() => setDepartmentToDelete(dept)}>
+                        <Trash2 className="mr-1 h-4 w-4" /> Delete
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
