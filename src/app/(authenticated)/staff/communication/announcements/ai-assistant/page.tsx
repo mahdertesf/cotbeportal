@@ -26,12 +26,12 @@ const announcementFormSchema = z.object({
 type AnnouncementFormData = z.infer<typeof announcementFormSchema>;
 
 const targetAudienceOptions = [
+  "All Portal Users",
   "All Students",
-  "All Faculty",
+  "All Teachers",
   "All Staff",
-  "Specific Department Students",
-  "Specific Department Faculty",
-  "General Public",
+  "Specific Department Students", // You'd need logic to select a department if this is chosen
+  "Specific Department Faculty",  // You'd need logic to select a department if this is chosen
 ];
 
 const desiredToneOptions = [
@@ -81,11 +81,18 @@ export default function AiAnnouncementGeneratorPage() {
     }
     setIsSavingDraft(true);
     // Placeholder for actual save logic
+    // In a real app, you'd call an API like:
+    // await createItem('announcements', { 
+    //   title: "AI Drafted: " + form.getValues('keyPoints').substring(0,30) + "...", // derive a title
+    //   content: announcementDraft, 
+    //   author_id: user.user_id, // Assuming user object is available in scope
+    //   target_audience: form.getValues('targetAudience'),
+    //   desired_tone: form.getValues('desiredTone'),
+    //   status: 'Draft' 
+    // });
     await new Promise(resolve => setTimeout(resolve, 1000));
     toast({ title: "Draft Saved (Mock)", description: "Your announcement draft has been notionally saved."});
     setIsSavingDraft(false);
-    // Here you would typically call an API to save the announcementDraft to your database
-    // e.g., await createItem('announcements', { title: "AI Drafted Announcement", content: announcementDraft, author_id: user.id, ... })
   };
 
 
@@ -194,7 +201,7 @@ export default function AiAnnouncementGeneratorPage() {
               {isSavingDraft ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save Draft (Mock)
             </Button>
-             <p className="text-xs text-muted-foreground mt-1">Saving to database requires backend implementation.</p>
+             <p className="text-xs text-muted-foreground mt-1">Saving to database requires backend implementation and an 'Announcements' table.</p>
           </CardContent>
         </Card>
       )}

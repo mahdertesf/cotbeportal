@@ -561,6 +561,13 @@ let mockDatabases: Record<string, any[]> = {
   teachers: [], // Populated by fetchItems('teachers') from fetchAllUsers
   assessments: {}, 
   registrations: [],
+  announcements: [ // Added mock announcements
+    { announcement_id: 'anno-1', title: 'Welcome to Fall 2024 Semester!', content: 'We are excited to welcome all new and returning students to the Fall 2024 semester. Please check your course schedules and familiarize yourself with the portal.', author_id: 'staff1', target_audience: 'All Portal Users', status: 'Published', publish_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { announcement_id: 'anno-2', title: 'CS Department Meeting', content: 'There will be a mandatory meeting for all Computer Science students on September 5th at 2 PM in Room 101.', author_id: 'teacher-2', target_audience: 'Specific Department Students', status: 'Published', publish_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { announcement_id: 'anno-3', title: 'Faculty Workshop on New Grading Policy', content: 'All faculty members are invited to a workshop on the new grading policy. Date: September 10th, 10 AM. Venue: Admin Conference Hall.', author_id: 'staff1', target_audience: 'All Teachers', status: 'Published', publish_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { announcement_id: 'anno-4', title: 'Portal Maintenance Downtime', content: 'The CoTBE portal will be down for scheduled maintenance on Saturday, September 7th, from 2 AM to 4 AM.', author_id: 'staff1', target_audience: 'All Portal Users', status: 'Published', publish_date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { announcement_id: 'anno-5', title: 'Staff Training Session', content: 'A training session for all administrative staff on the new HR software will be held next Monday.', author_id: 'staff1', target_audience: 'All Staff', status: 'Draft', publish_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  ],
 };
 
 // Initialize assessments for scheduled courses
@@ -627,6 +634,8 @@ export async function createItem(entity: string, data: any) {
     } as UserProfile;
   } else if (entity === 'scheduledCourses') {
     newItem = { scheduled_course_id: newId, current_enrollment: 0, ...data };
+  } else if (entity === 'announcements') { // Handle announcement creation
+     newItem = { announcement_id: newId, status: 'Draft', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...data };
   } else {
     newItem = { ...data, id: newId }; // Most other entities use 'id'
   }
@@ -650,12 +659,12 @@ export async function updateItem(entity: string, id: string | number, data: any)
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   
   let itemUpdated = false;
-  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : 'id';
+  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const index = mockDatabases[entity].findIndex((item: any) => String(item[idKey]) === String(id));
     if (index !== -1) {
-      mockDatabases[entity][index] = { ...mockDatabases[entity][index], ...data };
+      mockDatabases[entity][index] = { ...mockDatabases[entity][index], ...data, updated_at: new Date().toISOString() };
       itemUpdated = true;
     }
   } else if (entity.startsWith('assessments?courseId=')) {
@@ -682,7 +691,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
     console.log(`Mock DB: Registration ${id} updated with final_grade: ${data.final_grade}, grade_points: ${data.grade_points}`);
     const regIndex = mockDatabases.registrations.findIndex(r => String(r.registration_id) === String(id));
     if(regIndex !== -1) {
-      mockDatabases.registrations[regIndex] = {...mockDatabases.registrations[regIndex], ...data};
+      mockDatabases.registrations[regIndex] = {...mockDatabases.registrations[regIndex], ...data, updated_at: new Date().toISOString()};
       return { success: true, data: mockDatabases.registrations[regIndex] };
     }
     return { success: false, error: "Registration not found for update." };
@@ -693,7 +702,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
 export async function deleteItem(entity: string, id: string | number) {
   console.log(`Deleting ${entity} ${id}`);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : 'id';
+  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const initialLength = mockDatabases[entity].length;
@@ -771,6 +780,35 @@ export async function handleManualStudentRegistration(studentId: string, schedul
   
   return { success: true, message: message };
 }
+
+// Announcements API
+export async function fetchAnnouncements({ role, departmentId }: { role: UserRole, departmentId?: string | number }) {
+  console.log(`Fetching announcements for role: ${role}, departmentId: ${departmentId}`);
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+
+  const now = new Date();
+  const publishedAnnouncements = mockDatabases.announcements.filter(ann => {
+    return ann.status === 'Published' && new Date(ann.publish_date) <= now;
+  });
+
+  let relevantAnnouncements = publishedAnnouncements.filter(ann => {
+    if (ann.target_audience === 'All Portal Users') return true;
+    if (role === 'Student' && ann.target_audience === 'All Students') return true;
+    if (role === 'Teacher' && ann.target_audience === 'All Teachers') return true;
+    if (role === 'Staff Head' && ann.target_audience === 'All Staff') return true;
     
+    if (role === 'Student' && ann.target_audience === 'Specific Department Students' && String(ann.department_id) === String(departmentId)) return true;
+    if (role === 'Teacher' && ann.target_audience === 'Specific Department Faculty' && String(ann.department_id) === String(departmentId)) return true;
+    
+    return false;
+  });
+
+  // Sort by publish date descending
+  relevantAnnouncements.sort((a, b) => new Date(b.publish_date).getTime() - new Date(a.publish_date).getTime());
+  
+  return relevantAnnouncements;
+}
+    
+
 
 

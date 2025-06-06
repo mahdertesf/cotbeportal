@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -47,14 +48,15 @@ const navItems: NavItem[] = [
   // Common
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Student', 'Teacher', 'Staff Head'] },
   { href: '/profile', label: 'Profile', icon: UserCircle, roles: ['Student', 'Teacher', 'Staff Head'] },
+  { href: '/announcements', label: 'Announcements', icon: Megaphone, roles: ['Student', 'Teacher', 'Staff Head'] }, // Common announcements link
   
   // Student
   { href: '/student/courses/register', label: 'Course Registration', icon: NotebookText, roles: ['Student'] },
-  { href: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['Student'] }, // Will list courses, clicking goes to [scheduledCourseId]
+  { href: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['Student'] }, 
   { href: '/student/academic-history', label: 'Academic History', icon: FileText, roles: ['Student'] },
 
   // Teacher
-  { href: '/teacher/courses', label: 'My Assigned Courses', icon: Library, roles: ['Teacher'] }, // Will list courses, clicking goes to manage/[scheduledCourseId]
+  { href: '/teacher/courses', label: 'My Assigned Courses', icon: Library, roles: ['Teacher'] }, 
 
   // Staff Head
   { group: "User Management", href: '/staff/users', label: 'Manage Users', icon: Users, roles: ['Staff Head'] },
@@ -65,8 +67,8 @@ const navItems: NavItem[] = [
   { group: "Infrastructure", href: '/staff/infrastructure/rooms', label: 'Rooms', icon: Landmark, roles: ['Staff Head'] },
   { group: "Course Operations", href: '/staff/courses/schedule', label: 'Scheduled Courses', icon: ListChecks, roles: ['Staff Head'] },
   { group: "Course Operations", href: '/staff/students/manual-registration', label: 'Manual Registration', icon: FilePenLine, roles: ['Staff Head'] },
+  { group: "Communication", href: '/staff/communication/announcements/ai-assistant', label: 'AI Announcer', icon: Megaphone, roles: ['Staff Head'] }, // Changed group, still staff specific
   { group: "System", href: '/staff/system/audit-log', label: 'Audit Log', icon: ShieldAlert, roles: ['Staff Head'] },
-  { group: "System", href: '/staff/communication/announcements/ai-assistant', label: 'AI Announcer', icon: Megaphone, roles: ['Staff Head'] },
 ];
 
 const groupedNavItems = (role: UserRole) => {
@@ -74,6 +76,12 @@ const groupedNavItems = (role: UserRole) => {
   const groups: Record<string, NavItem[]> = {};
   
   filtered.forEach(item => {
+    // Special handling for the common "Announcements" link
+    if (item.label === 'Announcements') {
+        if (role === 'Student') item.href = '/student/announcements';
+        else if (role === 'Teacher') item.href = '/teacher/announcements';
+        else if (role === 'Staff Head') item.href = '/staff/announcements';
+    }
     const groupName = item.group || "General";
     if (!groups[groupName]) {
       groups[groupName] = [];
@@ -95,9 +103,6 @@ export function SidebarNav() {
   const currentRole = user.role;
   const roleNavGroups = groupedNavItems(currentRole);
 
-  // Adjust base path for role-specific navigation
-  const basePath = `/${currentRole.toLowerCase().replace(' ', '')}`;
-
   return (
     <SidebarMenu>
       {Object.entries(roleNavGroups).map(([groupName, items]) => (
@@ -106,9 +111,8 @@ export function SidebarNav() {
              <div className="px-4 pt-4 pb-1 text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider">{groupName}</div>
           )}
           {items.map((item) => {
-            // Construct full path, potentially prefixing with role if not already included
-            const fullPath = item.href.startsWith('/') ? item.href : `${basePath}${item.href}`;
-            const isActive = pathname === fullPath || (item.href !== '/dashboard' && pathname.startsWith(fullPath + (fullPath.endsWith('/') ? '' : '/')));
+            const fullPath = item.href; // Path is now fully resolved in groupedNavItems
+            const isActive = pathname === fullPath || (item.href !== '/dashboard' && !item.href.endsWith('/announcements') && pathname.startsWith(fullPath + (fullPath.endsWith('/') ? '' : '/')));
             const Icon = item.icon;
             
             return (
@@ -122,7 +126,7 @@ export function SidebarNav() {
                 {item.subItems && isActive && (
                   <SidebarMenuSub>
                     {item.subItems.map(subItem => {
-                      const subFullPath = subItem.href.startsWith('/') ? subItem.href : `${basePath}${subItem.href}`;
+                      const subFullPath = subItem.href;
                       const isSubActive = pathname === subFullPath;
                       const SubIcon = subItem.icon;
                       return (
@@ -146,3 +150,4 @@ export function SidebarNav() {
     </SidebarMenu>
   );
 }
+
