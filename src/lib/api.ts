@@ -99,11 +99,11 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
   console.log('Fetching all users');
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   return [
-    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-cs', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
-    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-ee', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
+    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
+    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-2', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
     { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100" },
-    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-me', department_name: "Mechanical Engineering", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
-    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-ce', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
+    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
+    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-3', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
   ];
 }
 
@@ -434,7 +434,21 @@ export async function fetchItems(entity: string, filters?: any) {
   console.log(`Fetching ${entity} with filters:`, filters);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   if (entity === 'departments') {
-    return [{id: 'dept-1', name: 'Computer Science', description: 'CS Department'}, {id: 'dept-2', name: 'Mechanical Engineering', description: 'ME Department'}];
+    return [
+        {id: 'dept-1', name: 'Computer Science', description: 'Department of Computer Science and Engineering.'}, 
+        {id: 'dept-2', name: 'Electrical Engineering', description: 'Department of Electrical and Computer Engineering.'},
+        {id: 'dept-3', name: 'Mechanical Engineering', description: 'Department of Mechanical and Industrial Engineering.'},
+        {id: 'dept-4', name: 'Civil Engineering', description: 'Department of Civil and Environmental Engineering.'},
+        {id: 'dept-5', name: 'Biomedical Engineering', description: 'Department of Biomedical Engineering.'},
+    ];
+  }
+  if (entity === 'courses') {
+    return [
+        {id: 'course-1', course_code: 'CS101', title: 'Introduction to Programming', description: 'Fundamentals of programming using Python.', credits: 3, department_id: 'dept-1'},
+        {id: 'course-2', course_code: 'EE201', title: 'Circuit Theory I', description: 'Basic electric circuit analysis.', credits: 4, department_id: 'dept-2'},
+        {id: 'course-3', course_code: 'MECH210', title: 'Statics', description: 'Principles of engineering mechanics.', credits: 3, department_id: 'dept-3'},
+        {id: 'course-4', course_code: 'CS350', title: 'Software Engineering', description: 'Software development lifecycle and methodologies.', credits: 3, department_id: 'dept-1'},
+    ];
   }
   if (entity.startsWith('assessments?courseId=')) { 
     const courseId = entity.split('=')[1];
@@ -481,9 +495,10 @@ export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  const newId = `${entity.slice(0,4)}-${Math.floor(Math.random() * 100000)}`;
   if (entity === 'users') {
     const newUser: UserProfile = {
-        user_id: `user-${Math.floor(Math.random() * 100000)}`,
+        user_id: newId,
         is_active: true,
         date_joined: new Date().toISOString(),
         last_login: new Date().toISOString(),
@@ -492,7 +507,7 @@ export async function createItem(entity: string, data: any) {
     // Further tailor based on role if needed
     return { success: true, data: newUser, error: null};
   }
-  return { success: true, data: { ...data, id: `${entity.slice(0,4)}-${Math.random()}` }, error: null};
+  return { success: true, data: { ...data, id: newId }, error: null};
 }
 
 export async function updateItem(entity: string, id: string | number, data: any) {
@@ -527,7 +542,3 @@ export async function fetchAuditLogs(filters?: any) {
     const limit = filters?.limit || 50;
     return defaultLogs.slice(0, limit);
 }
-
-
-    
-
