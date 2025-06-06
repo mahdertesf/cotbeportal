@@ -474,8 +474,8 @@ export async function fetchItems(entity: string, filters?: any) {
   }
   if (entity === 'semesters') {
     return [
-      { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Fall', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00:00', registration_end_date: '2024-08-30T17:00:00', add_drop_start_date: '2024-09-02T09:00:00', add_drop_end_date: '2024-09-09T17:00:00' },
-      { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Spring', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00:00', registration_end_date: '2025-01-10T17:00:00', add_drop_start_date: '2025-01-13T09:00:00', add_drop_end_date: '2025-01-20T17:00:00' },
+      { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Semester One', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00:00', registration_end_date: '2024-08-30T17:00:00', add_drop_start_date: '2024-09-02T09:00:00', add_drop_end_date: '2024-09-09T17:00:00' },
+      { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Semester Two', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00:00', registration_end_date: '2025-01-10T17:00:00', add_drop_start_date: '2025-01-13T09:00:00', add_drop_end_date: '2025-01-20T17:00:00' },
     ];
   }
   return [];

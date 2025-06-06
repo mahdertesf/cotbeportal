@@ -23,7 +23,7 @@ interface Semester {
   id: string | number;
   name: string;
   academic_year: number;
-  term: 'Fall' | 'Spring' | 'Summer' | 'Winter';
+  term: 'Semester One' | 'Semester Two'; // Updated term options
   start_date: string; // ISO date string e.g., "2024-09-01"
   end_date: string;   // ISO date string
   registration_start_date: string; // ISO datetime string e.g., "2024-07-15T09:00:00"
@@ -36,7 +36,7 @@ const semesterFormSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   name: z.string().min(3, "Name must be at least 3 characters").max(50, "Max 50 characters"),
   academic_year: z.coerce.number().min(2000, "Academic year must be 2000 or later").max(2100, "Academic year too far in future"),
-  term: z.enum(['Fall', 'Spring', 'Summer', 'Winter'], { required_error: "Term is required" }),
+  term: z.enum(['Semester One', 'Semester Two'], { required_error: "Term is required" }), // Updated term options
   start_date: z.string().min(1, "Start date is required").regex(/^\d{4}-\d{2}-\d{2}$/, "Start date must be YYYY-MM-DD"),
   end_date: z.string().min(1, "End date is required").regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be YYYY-MM-DD"),
   registration_start_date: z.string().min(1, "Reg. start is required").regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Date/time must be YYYY-MM-DDTHH:mm"),
@@ -311,15 +311,13 @@ export default function SemesterManagementPage() {
             </div>
             <div>
               <Label htmlFor="term">Term</Label>
-              <Select onValueChange={(value) => form.setValue('term', value as 'Fall'|'Spring'|'Summer'|'Winter')} defaultValue={form.getValues('term')}>
+              <Select onValueChange={(value) => form.setValue('term', value as 'Semester One'|'Semester Two')} defaultValue={form.getValues('term')}>
                 <SelectTrigger id="term">
                   <SelectValue placeholder="Select a term" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fall">Fall</SelectItem>
-                  <SelectItem value="Spring">Spring</SelectItem>
-                  <SelectItem value="Summer">Summer</SelectItem>
-                  <SelectItem value="Winter">Winter</SelectItem>
+                  <SelectItem value="Semester One">Semester One</SelectItem>
+                  <SelectItem value="Semester Two">Semester Two</SelectItem>
                 </SelectContent>
               </Select>
               {form.formState.errors.term && <p className="text-sm text-destructive mt-1">{form.formState.errors.term.message}</p>}
