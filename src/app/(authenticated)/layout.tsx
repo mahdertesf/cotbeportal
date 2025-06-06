@@ -65,7 +65,7 @@ export default function AuthenticatedLayout({
           <SidebarHeader className="flex flex-col items-center p-4 border-b border-sidebar-border">
              <Link href="/dashboard" className="mb-2">
                 <Image 
-                    src="/cotbe-logo.png" 
+                    src="/cotbe-logo-main.png" 
                     alt="CoTBE Portal Logo" 
                     width={42} 
                     height={40}

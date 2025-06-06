@@ -15,7 +15,7 @@ export function AuthFormCard({ title, description, children, footerContent }: Au
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="items-center text-center">
           <Image 
-            src="/cotbe-logo.png" 
+            src="/cotbe-logo-main.png" 
             alt="CoTBE Logo" 
             width={52} 
             height={50}
