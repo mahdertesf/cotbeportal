@@ -42,6 +42,7 @@ export async function handleLogin(username: string, password_hash: string, role:
   } else if (role === 'Teacher') {
     mockUserData = {
       ...mockUserData,
+      user_id: `teacher-${mockUserId}`, // Ensure teacher IDs are distinct if needed for lookups
       department_id: `dept-${Math.floor(Math.random() * 5) + 1}`,
       department_name: `Department of Advanced Mocking ${Math.floor(Math.random() * 5) + 1}`,
       office_location: `Building ${Math.floor(Math.random() * 10) + 1}, Room ${Math.floor(Math.random() * 100) + 100}`,
@@ -100,10 +101,11 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   return [
     { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
-    { user_id: 'teach1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-2', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
+    { user_id: 'teacher-1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-2', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
     { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100" },
     { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
     { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-3', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
+    { user_id: 'teacher-2', username: 'teacher.two', email: 't2@cotbe.edu', role: 'Teacher', first_name: 'Solomon', last_name: 'Gizaw', is_active: true, date_joined: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", office_location: "Block A, Room 105", phone_number: "0912987654" },
   ];
 }
 
@@ -141,10 +143,30 @@ export async function updateStudentProfile(userId: string | number, data: Partia
 export async function fetchAvailableCourses(filters?: any) {
   console.log('Fetching available courses with filters:', filters);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return [
-    { id: 'sc1', course_code: 'CS101', title: 'Intro to Programming', credits: 3, section_number: 'A', teacher_name: 'Dr. T. Alemayehu', room_name: 'B1-R101', schedule: 'MWF 9-10AM', max_capacity: 50, current_enrollment: 45, description: 'Fundamentals of programming.', prerequisites: [] },
-    { id: 'sc2', course_code: 'MA202', title: 'Calculus II', credits: 4, section_number: 'B', teacher_name: 'Prof. S. Kebede', room_name: 'C2-R205', schedule: 'TTH 1-3PM', max_capacity: 30, current_enrollment: 28, description: 'Advanced calculus topics.', prerequisites: ['MA101 Calculus I'] },
-  ];
+  const allScheduled = await fetchItems('scheduledCourses');
+  const catalog = await fetchItems('courses');
+  const teachers = await fetchItems('teachers');
+  const rooms = await fetchItems('rooms');
+
+  return allScheduled.map((sc: any) => {
+    const courseDetail = catalog.find((c:any) => c.id === sc.course_id);
+    const teacherDetail = teachers.find((t:any) => t.user_id === sc.teacher_id);
+    const roomDetail = rooms.find((r:any) => r.id === sc.room_id);
+    return {
+      id: sc.scheduled_course_id, // This is the scheduled_course_id
+      course_code: courseDetail?.course_code || 'N/A',
+      title: courseDetail?.title || 'N/A',
+      credits: courseDetail?.credits || 0,
+      section_number: sc.section_number,
+      teacher_name: teacherDetail ? `${teacherDetail.first_name} ${teacherDetail.last_name}` : 'N/A',
+      room_name: roomDetail ? `${roomDetail.room_number} (${roomDetail.building_name})` : 'N/A',
+      schedule: `${sc.days_of_week || ''} ${sc.start_time || ''}-${sc.end_time || ''}`.trim(),
+      max_capacity: sc.max_capacity,
+      current_enrollment: sc.current_enrollment,
+      description: courseDetail?.description || '',
+      prerequisites: [], // Mock prerequisites if needed
+    };
+  });
 }
 
 export async function handleRegisterCourse(scheduledCourseId: string) {
@@ -164,7 +186,7 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
    return [
     { registrationId: 'reg1', scheduledCourseId: 'sc1', course_code: 'CS101', title: 'Intro to Programming', status: 'Registered', final_grade: null },
-    { registrationId: 'reg2', scheduledCourseId: 'sc3', course_code: 'ENGL100', title: 'Communicative English', status: 'Registered', final_grade: null },
+    { registrationId: 'reg2', scheduledCourseId: 'sc-fall24-ee305-a', course_code: 'EE305', title: 'Digital Logic Design', status: 'Registered', final_grade: null },
   ];
 }
 
@@ -328,22 +350,31 @@ export async function updateStaffProfile(userId: string | number, data: Partial<
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
     console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return [
-        { scheduled_course_id: 'sc10', course_code: 'EE305', title: 'Digital Logic Design', section: 'A' },
-        { scheduled_course_id: 'sc11', course_code: 'EE305', title: 'Digital Logic Design', section: 'B' },
-        { scheduled_course_id: 'sc12', course_code: 'EE450', title: 'Embedded Systems', section: 'A' },
-    ];
+    // Filter scheduledCourses by teacherId
+    const allScheduled = await fetchItems('scheduledCourses');
+    const courses = await fetchItems('courses');
+    
+    return allScheduled
+      .filter((sc: any) => sc.teacher_id === teacherId)
+      .map((sc: any) => {
+        const courseInfo = courses.find((c:any) => c.id === sc.course_id);
+        return {
+          scheduled_course_id: sc.scheduled_course_id,
+          course_code: courseInfo?.course_code || 'N/A',
+          title: courseInfo?.title || 'N/A',
+          section: sc.section_number,
+        };
+      });
 }
 
 export async function fetchStudentRoster(scheduledCourseId: string): Promise<Array<{ student_id: string; first_name: string; last_name: string; email: string; }>> {
     console.log('Fetching student roster for course:', scheduledCourseId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    // Mock data based on a known scheduledCourseId, e.g. 'sc10' from fetchTeacherAssignedCourses
-    if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
+    // Mock data based on a known scheduledCourseId
+    if (scheduledCourseId === 'sc-fall24-cs101-a' || scheduledCourseId === 'sc-fall24-ee305-a' || scheduledCourseId === 'sc-fall24-ee305-b') {
         return [
             { student_id: 'stud1', first_name: 'Abebe', last_name: 'Bekele', email: 'abebe@example.com' },
-            { student_id: 'stud2', first_name: 'Chaltu', last_name: 'Lemma', email: 'chaltu@example.com' },
-            { student_id: 'stud3', first_name: 'Kebede', last_name: 'Tadesse', email: 'kebede@example.com' },
+            { student_id: 'stud2', first_name: 'Hana', last_name: 'Girma', email: 'hana@example.com' },
         ];
     }
     return [];
@@ -393,163 +424,221 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
 
   const mockScores: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
 
-  if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
-    const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
-    const students = ['stud1', 'stud2', 'stud3']; // From fetchStudentRoster
+  // Use dynamic course ID for assessment lookup
+  const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
+  const students = await fetchStudentRoster(scheduledCourseId); // Get students for this course
 
-    students.forEach(studentId => {
-      mockScores[studentId] = {};
+  students.forEach(student => {
+      mockScores[student.student_id] = {};
       courseAssessments.forEach((asm: any) => {
         const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
         let score: number | null = null;
-        let feedback: string | null = "Mock feedback.";
+        let feedback: string | null = "Mock feedback provided.";
 
-        if (studentId === 'stud1') { // stud1 has all scores
-          score = Math.floor(Math.random() * (maxScore * 0.8) + maxScore * 0.2); // Score between 20% and 100% of max
-        } else if (studentId === 'stud2') {
-          if (asm.id === (courseAssessments[0] as any)?.id) { // Score for first assessment
-             score = Math.floor(Math.random() * (maxScore * 0.7) + maxScore * 0.1); // Score between 10% and 80%
-          } else { // Missing score for other assessments for stud2
-            score = null;
-            feedback = null;
-          }
-        } else if (studentId === 'stud3') { // stud3 has varied scores, some missing
-           if (asm.id === (courseAssessments[0] as any)?.id) {
-             score = Math.floor(Math.random() * (maxScore * 0.5)); // Lower score for first assessment
-           } else {
-             score = null; // Missing for others
-             feedback = null;
-           }
+        // Simulate some scores, make some null
+        if (Math.random() > 0.3) { // 70% chance of having a score
+            score = Math.floor(Math.random() * maxScore * 0.6 + maxScore * 0.4); // Score between 40% and 100%
+        } else {
+            feedback = null; // No feedback if not graded
         }
-        mockScores[studentId][asm.id] = { score, feedback };
+        mockScores[student.student_id][asm.id] = { score, feedback };
       });
     });
-  }
   return mockScores;
 }
 
 
 // --- Generic CRUD placeholders ---
+let mockDatabases: Record<string, any[]> = {
+  departments: [
+    {id: 'dept-1', name: 'Computer Science', description: 'Department of Computer Science and Engineering.'}, 
+    {id: 'dept-2', name: 'Electrical Engineering', description: 'Department of Electrical and Computer Engineering.'},
+    {id: 'dept-3', name: 'Mechanical Engineering', description: 'Department of Mechanical and Industrial Engineering.'},
+    {id: 'dept-4', name: 'Civil Engineering', description: 'Department of Civil and Environmental Engineering.'},
+    {id: 'dept-5', name: 'Biomedical Engineering', description: 'Department of Biomedical Engineering.'},
+  ],
+  courses: [
+    {id: 'course-1', course_code: 'CS101', title: 'Introduction to Programming', description: 'Fundamentals of programming using Python.', credits: 3, department_id: 'dept-1'},
+    {id: 'course-2', course_code: 'EE201', title: 'Circuit Theory I', description: 'Basic electric circuit analysis.', credits: 4, department_id: 'dept-2'},
+    {id: 'course-3', course_code: 'MECH210', title: 'Statics', description: 'Principles of engineering mechanics.', credits: 3, department_id: 'dept-3'},
+    {id: 'course-4', course_code: 'CS350', title: 'Software Engineering', description: 'Software development lifecycle and methodologies.', credits: 3, department_id: 'dept-1'},
+    {id: 'course-5', course_code: 'EE305', title: 'Digital Logic Design', description: 'Design and analysis of digital circuits.', credits: 3, department_id: 'dept-2'},
+  ],
+  semesters: [
+    { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Semester One', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00', registration_end_date: '2024-08-30T17:00', add_drop_start_date: '2024-09-02T09:00', add_drop_end_date: '2024-09-09T17:00' },
+    { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Semester Two', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00', registration_end_date: '2025-01-10T17:00', add_drop_start_date: '2025-01-13T09:00', add_drop_end_date: '2025-01-20T17:00' },
+  ],
+  buildings: [
+    { id: 'bldg-1', name: 'Main Engineering Building', address: '1 Engineering Drive, CoTBE Campus' },
+    { id: 'bldg-2', name: 'Technology Hall', address: '2 Innovation Avenue, CoTBE Campus' },
+    { id: 'bldg-3', name: 'Architecture Pavilion', address: '3 Design Street, CoTBE Campus' },
+    { id: 'bldg-4', name: 'Research Complex Alpha', address: '4 Discovery Road, CoTBE Campus' },
+  ],
+  rooms: [ // Added building_name here for simplicity in mock, ideally this is a join
+    { id: 'room-1', building_id: 'bldg-1', room_number: '101', capacity: 50, type: 'Lecture Hall', building_name: 'Main Engineering Building' },
+    { id: 'room-2', building_id: 'bldg-1', room_number: '102 Lab', capacity: 30, type: 'Computer Lab', building_name: 'Main Engineering Building' },
+    { id: 'room-3', building_id: 'bldg-2', room_number: 'A205', capacity: 75, type: 'Lecture Hall', building_name: 'Technology Hall' },
+    { id: 'room-4', building_id: 'bldg-3', room_number: 'Studio 1', capacity: 20, type: 'Design Studio', building_name: 'Architecture Pavilion' },
+    { id: 'room-5', building_id: 'bldg-2', room_number: 'B101', capacity: 40, type: 'Classroom', building_name: 'Technology Hall' },
+  ],
+  scheduledCourses: [
+    { scheduled_course_id: 'sc-fall24-cs101-a', course_id: 'course-1', semester_id: 'sem-1', teacher_id: 'teacher-2', room_id: 'room-1', section_number: 'A', max_capacity: 50, current_enrollment: 45, days_of_week: 'MWF', start_time: '09:00', end_time: '09:50' },
+    { scheduled_course_id: 'sc-fall24-ee305-a', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-3', section_number: 'A', max_capacity: 30, current_enrollment: 28, days_of_week: 'TTH', start_time: '13:00', end_time: '14:15' },
+    { scheduled_course_id: 'sc-fall24-ee305-b', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-5', section_number: 'B', max_capacity: 25, current_enrollment: 20, days_of_week: 'TTH', start_time: '10:00', end_time: '11:15' },
+  ],
+  users: [], // Populated by fetchAllUsers directly
+  teachers: [], // Populated by fetchItems('teachers') from fetchAllUsers
+  assessments: {}, // Store assessments per courseId, e.g., assessments['sc-id'] = [...]
+};
+
+// Initialize assessments for scheduled courses
+mockDatabases.scheduledCourses.forEach(sc => {
+    const courseIdKey = `assessments?courseId=${sc.scheduled_course_id}`;
+    if (!mockDatabases.assessments[courseIdKey]) {
+        mockDatabases.assessments[courseIdKey] = [
+            { id: `asm-${sc.scheduled_course_id}-1`, scheduledCourseId: sc.scheduled_course_id, name: `Quiz 1 (${sc.course_id})`, description: 'Covers week 1-3.', max_score: 20, due_date: '2024-09-15T23:59:00Z', type: 'Quiz' },
+            { id: `asm-${sc.scheduled_course_id}-2`, scheduledCourseId: sc.scheduled_course_id, name: `Midterm (${sc.course_id})`, description: 'Comprehensive Midterm.', max_score: 30, due_date: '2024-10-15T23:59:00Z', type: 'Exam' },
+        ];
+    }
+});
+
+
 export async function fetchItems(entity: string, filters?: any) {
   console.log(`Fetching ${entity} with filters:`, filters);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  if (entity === 'departments') {
-    return [
-        {id: 'dept-1', name: 'Computer Science', description: 'Department of Computer Science and Engineering.'}, 
-        {id: 'dept-2', name: 'Electrical Engineering', description: 'Department of Electrical and Computer Engineering.'},
-        {id: 'dept-3', name: 'Mechanical Engineering', description: 'Department of Mechanical and Industrial Engineering.'},
-        {id: 'dept-4', name: 'Civil Engineering', description: 'Department of Civil and Environmental Engineering.'},
-        {id: 'dept-5', name: 'Biomedical Engineering', description: 'Department of Biomedical Engineering.'},
-    ];
+
+  if (mockDatabases[entity]) {
+    return JSON.parse(JSON.stringify(mockDatabases[entity])); // Return a deep copy
   }
-  if (entity === 'courses') {
-    return [
-        {id: 'course-1', course_code: 'CS101', title: 'Introduction to Programming', description: 'Fundamentals of programming using Python.', credits: 3, department_id: 'dept-1'},
-        {id: 'course-2', course_code: 'EE201', title: 'Circuit Theory I', description: 'Basic electric circuit analysis.', credits: 4, department_id: 'dept-2'},
-        {id: 'course-3', course_code: 'MECH210', title: 'Statics', description: 'Principles of engineering mechanics.', credits: 3, department_id: 'dept-3'},
-        {id: 'course-4', course_code: 'CS350', title: 'Software Engineering', description: 'Software development lifecycle and methodologies.', credits: 3, department_id: 'dept-1'},
-    ];
+  if (entity === 'teachers') { // Special handling for teachers from users
+    const allUsers = await fetchAllUsers();
+    return allUsers
+        .filter(user => user.role === 'Teacher')
+        .map(user => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name }));
   }
-  if (entity.startsWith('assessments?courseId=')) { 
-    const courseId = entity.split('=')[1];
-    if (courseId === 'sc10' || courseId === 'sc11' || courseId === 'sc12') { // Example course IDs
-        return [
-            { id: `asm-${courseId}-1`, scheduledCourseId: courseId, name: `Quiz 1 (${courseId})`, description: 'Covers week 1-3.', max_score: 20, due_date: '2024-09-15T23:59:00Z', type: 'Quiz' },
-            { id: `asm-${courseId}-2`, scheduledCourseId: courseId, name: `Midterm Project (${courseId})`, description: 'Practical application.', max_score: 30, due_date: '2024-10-15T23:59:00Z', type: 'Project' },
-            { id: `asm-${courseId}-3`, scheduledCourseId: courseId, name: `Final Exam (${courseId})`, description: 'Comprehensive final.', max_score: 50, due_date: '2024-11-15T23:59:00Z', type: 'Exam' },
-        ];
-    }
-    // Default for other courses
-    return [
-        { id: 'asm-generic-1', scheduledCourseId: courseId, name: 'Generic Quiz 1', description: 'Basics', max_score: 20, due_date: '2024-08-15T23:59:00Z', type: 'Quiz' },
-        { id: 'asm-generic-2', scheduledCourseId: courseId, name: 'Generic Assignment 1', description: 'Looping', max_score: 50, due_date: '2024-08-30T23:59:00Z', type: 'Assignment' },
-    ];
+  if (entity.startsWith('assessments?courseId=')) { // Assessments per course
+    return JSON.parse(JSON.stringify(mockDatabases.assessments[entity] || []));
   }
-  if (entity === 'scheduledCourses') { // For Staff Dashboard
-    return [
-        { id: 'sc1', course_code: 'CS101', title: 'Intro to Programming', current_enrollment: 45 },
-        { id: 'sc2', course_code: 'MA202', title: 'Calculus II', current_enrollment: 28 },
-        { id: 'sc10', course_code: 'EE305', title: 'Digital Logic Design', current_enrollment: 30 },
-    ];
-  }
-  if (entity === 'semesters') {
-    return [
-      { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Semester One', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00', registration_end_date: '2024-08-30T17:00', add_drop_start_date: '2024-09-02T09:00', add_drop_end_date: '2024-09-09T17:00' },
-      { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Semester Two', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00', registration_end_date: '2025-01-10T17:00', add_drop_start_date: '2025-01-13T09:00', add_drop_end_date: '2025-01-20T17:00' },
-    ];
-  }
-   if (entity === 'buildings') {
-    return [
-      { id: 'bldg-1', name: 'Main Engineering Building', address: '1 Engineering Drive, CoTBE Campus' },
-      { id: 'bldg-2', name: 'Technology Hall', address: '2 Innovation Avenue, CoTBE Campus' },
-      { id: 'bldg-3', name: 'Architecture Pavilion', address: '3 Design Street, CoTBE Campus' },
-      { id: 'bldg-4', name: 'Research Complex Alpha', address: '4 Discovery Road, CoTBE Campus' },
-    ];
-  }
-   if (entity === 'rooms') {
-    return [
-      { id: 'room-1', building_id: 'bldg-1', room_number: '101', capacity: 50, type: 'Lecture Hall' },
-      { id: 'room-2', building_id: 'bldg-1', room_number: '102 Lab', capacity: 30, type: 'Computer Lab' },
-      { id: 'room-3', building_id: 'bldg-2', room_number: 'A205', capacity: 75, type: 'Lecture Hall' },
-      { id: 'room-4', building_id: 'bldg-3', room_number: 'Studio 1', capacity: 20, type: 'Design Studio' },
-      { id: 'room-5', building_id: 'bldg-2', room_number: 'B101', capacity: 40, type: 'Classroom' },
-    ];
+   if (entity === 'scheduledCourses') { // For Staff Dashboard, now using the main mock
+    return JSON.parse(JSON.stringify(mockDatabases.scheduledCourses));
   }
   return [];
 }
+
 
 // Kept for fetching student's own old grades if needed, but FinalGradesSubmission uses fetchStudentRegistrationsForCourseGrading
 export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; final_grade: string | null; grade_points: number | null }>> {
   console.log('Fetching final grades for course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Mock data: associate with students from fetchStudentRoster for consistency
-  if (scheduledCourseId === 'sc10' || scheduledCourseId === 'sc11' || scheduledCourseId === 'sc12') {
-    return [
-      // Example: Assume stud1 has a previously saved A, stud2 a B+, stud3 nothing
-      { registration_id: `reg-${scheduledCourseId}-stud1`, student_id: 'stud1', final_grade: 'A', grade_points: 4.00 },
-      { registration_id: `reg-${scheduledCourseId}-stud2`, student_id: 'stud2', final_grade: 'B+', grade_points: 3.30 },
-      { registration_id: `reg-${scheduledCourseId}-stud3`, student_id: 'stud3', final_grade: null, grade_points: null },
-    ];
-  }
-  return [];
+  
+  const studentRegistrations = await fetchStudentRegistrationsForCourseGrading(scheduledCourseId);
+
+  return studentRegistrations.map(reg => ({
+    registration_id: reg.registration_id,
+    student_id: reg.student_id,
+    final_grade: reg.current_final_grade, // This needs to come from Registrations table in a real DB
+    grade_points: reg.current_grade_points, // Likewise
+  }));
 }
 
 
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  const newId = `${entity.slice(0,4)}-${Math.floor(Math.random() * 100000)}`;
+  const newId = `${entity.slice(0,4)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  
+  let newItem = { ...data };
   if (entity === 'users') {
-    const newUser: UserProfile = {
-        user_id: newId,
+     newItem = {
+        user_id: newId, // Users have user_id
         is_active: true,
         date_joined: new Date().toISOString(),
         last_login: new Date().toISOString(),
         ...data,
-    };
-    // Further tailor based on role if needed
-    return { success: true, data: newUser, error: null};
+    } as UserProfile;
+  } else if (entity === 'scheduledCourses') {
+    newItem = { scheduled_course_id: newId, current_enrollment: 0, ...data };
+  } else {
+    newItem = { ...data, id: newId }; // Most other entities use 'id'
   }
-  return { success: true, data: { ...data, id: newId }, error: null};
+
+  if (mockDatabases[entity]) {
+    mockDatabases[entity].push(newItem);
+  } else if (entity.startsWith('assessments?courseId=')) {
+      if (!mockDatabases.assessments[entity]) mockDatabases.assessments[entity] = [];
+      newItem.id = `asm-${entity.split('=')[1]}-${Date.now()}`; // ensure assessment id is unique in its course context
+      mockDatabases.assessments[entity].push(newItem);
+  } else {
+    console.warn(`Mock database for entity "${entity}" not explicitly handled for creation, using generic push.`);
+    // Fallback for entities not explicitly in mockDatabases (less ideal)
+    if (!mockDatabases[entity]) mockDatabases[entity] = [];
+     mockDatabases[entity].push(newItem);
+  }
+  return { success: true, data: newItem, error: null};
 }
 
 export async function updateItem(entity: string, id: string | number, data: any) {
   console.log(`Updating ${entity} ${id}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  
+  let itemUpdated = false;
+  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : 'id';
+
+  if (mockDatabases[entity]) {
+    const index = mockDatabases[entity].findIndex((item: any) => String(item[idKey]) === String(id));
+    if (index !== -1) {
+      mockDatabases[entity][index] = { ...mockDatabases[entity][index], ...data };
+      itemUpdated = true;
+    }
+  } else if (entity.startsWith('assessments?courseId=')) {
+      if (mockDatabases.assessments[entity]) {
+          const index = mockDatabases.assessments[entity].findIndex((item: any) => String(item.id) === String(id));
+           if (index !== -1) {
+             mockDatabases.assessments[entity][index] = { ...mockDatabases.assessments[entity][index], ...data };
+             itemUpdated = true;
+           }
+      }
+  }
+
+
+  if (!itemUpdated) {
+    console.warn(`Item with id ${id} not found in entity ${entity} for update.`);
+    return { success: false, error: "Item not found", data: null };
+  }
+  
+  // Special handling for user updates if needed
   if (entity === 'users') {
-     const updatedUser: Partial<UserProfile> = { user_id: id, ...data };
+     const updatedUser: Partial<UserProfile> = { [idKey]: id, ...data };
      return { success: true, data: updatedUser, error: null};
   }
-  if (entity === 'registrations') {
+  if (entity === 'registrations') { // For final grade submission
     console.log(`Mock DB: Registration ${id} updated with final_grade: ${data.final_grade}, grade_points: ${data.grade_points}`);
   }
-  return { success: true, data: { id, ...data }, error: null};
+  return { success: true, data: { [idKey]: id, ...data }, error: null};
 }
 
 export async function deleteItem(entity: string, id: string | number) {
   console.log(`Deleting ${entity} ${id}`);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return { success: true };
+  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : 'id';
+
+  if (mockDatabases[entity]) {
+    const initialLength = mockDatabases[entity].length;
+    mockDatabases[entity] = mockDatabases[entity].filter((item: any) => String(item[idKey]) !== String(id));
+    if (mockDatabases[entity].length < initialLength) {
+      return { success: true };
+    }
+  } else if (entity.startsWith('assessments?courseId=')) {
+      if (mockDatabases.assessments[entity]) {
+          const initialLength = mockDatabases.assessments[entity].length;
+          mockDatabases.assessments[entity] = mockDatabases.assessments[entity].filter((item: any) => String(item.id) !== String(id));
+          if (mockDatabases.assessments[entity].length < initialLength) {
+            return { success: true };
+          }
+      }
+  }
+  console.warn(`Item with id ${id} not found in entity ${entity} for deletion.`);
+  return { success: false, error: "Item not found" };
 }
 
 export async function fetchAuditLogs(filters?: any) {
@@ -568,3 +657,4 @@ export async function fetchAuditLogs(filters?: any) {
 
 
     
+
