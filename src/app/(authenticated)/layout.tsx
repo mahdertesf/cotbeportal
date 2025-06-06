@@ -65,12 +65,12 @@ export default function AuthenticatedLayout({
           <SidebarHeader className="flex flex-col items-center p-4 border-b border-sidebar-border">
              <Link href="/dashboard" className="mb-2">
                 <Image 
-                    src="https://placehold.co/180x60.png?text=CoTBE+Portal&font=spacegrotesk" 
+                    src="/cotbe-logo.png" 
                     alt="CoTBE Portal Logo" 
-                    width={140} 
+                    width={42} 
                     height={40}
                     priority
-                    data-ai-hint="university portal logo"
+                    data-ai-hint="university emblem"
                  />
              </Link>
           </SidebarHeader>

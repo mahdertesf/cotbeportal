@@ -16,6 +16,14 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // Add other remote patterns if you host images on CDNs like Imgur, Cloudinary, etc.
+      // For example, if you were to use a publicly hosted version of the logo:
+      // {
+      //   protocol: 'https',
+      //   hostname: 'i.imgur.com', 
+      //   port: '',
+      //   pathname: '/**',
+      // },
     ],
   },
 };

@@ -15,12 +15,12 @@ export function AuthFormCard({ title, description, children, footerContent }: Au
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="items-center text-center">
           <Image 
-            src="https://placehold.co/150x50.png?text=CoTBE+Logo" 
-            alt="CoTBE Logo Placeholder" 
-            width={150} 
+            src="/cotbe-logo.png" 
+            alt="CoTBE Logo" 
+            width={52} 
             height={50}
             className="mb-4"
-            data-ai-hint="university logo"
+            data-ai-hint="university emblem"
           />
           <CardTitle className="font-headline text-2xl">{title}</CardTitle>
           {description && <CardDescription className="font-body">{description}</CardDescription>}
