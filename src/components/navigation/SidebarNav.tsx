@@ -32,7 +32,8 @@ import {
   NotebookText,
   FilePenLine,
   ListChecks,
-  BarChart3
+  BarChart3,
+  UserCog // For Admin or specific staff settings
 } from 'lucide-react';
 
 interface NavItem {
@@ -41,14 +42,14 @@ interface NavItem {
   icon: React.ElementType;
   roles: UserRole[];
   subItems?: NavItem[];
-  group?: string; // For grouping academic structure, infrastructure etc.
+  group?: string; 
 }
 
 const navItems: NavItem[] = [
   // Common
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Student', 'Teacher', 'Staff Head'] },
-  { href: '/profile', label: 'Profile', icon: UserCircle, roles: ['Student', 'Teacher', 'Staff Head'] },
-  { href: '/announcements', label: 'Announcements', icon: Megaphone, roles: ['Student', 'Teacher', 'Staff Head'] }, // Common announcements link
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Student', 'Teacher', 'Staff Head', 'Admin'] },
+  { href: '/profile', label: 'Profile', icon: UserCircle, roles: ['Student', 'Teacher', 'Staff Head', 'Admin'] },
+  { href: '/announcements', label: 'Announcements', icon: Megaphone, roles: ['Student', 'Teacher', 'Staff Head', 'Admin'] }, 
   
   // Student
   { href: '/student/courses/register', label: 'Course Registration', icon: NotebookText, roles: ['Student'] },
@@ -58,17 +59,17 @@ const navItems: NavItem[] = [
   // Teacher
   { href: '/teacher/courses', label: 'My Assigned Courses', icon: Library, roles: ['Teacher'] }, 
 
-  // Staff Head
-  { group: "User Management", href: '/staff/users', label: 'Manage Users', icon: Users, roles: ['Staff Head'] },
-  { group: "Academic Structure", href: '/staff/departments', label: 'Departments', icon: School, roles: ['Staff Head'] },
-  { group: "Academic Structure", href: '/staff/courses/catalog', label: 'Course Catalog', icon: BookOpen, roles: ['Staff Head'] },
-  { group: "Academic Structure", href: '/staff/semesters', label: 'Semesters', icon: CalendarDays, roles: ['Staff Head'] },
-  { group: "Infrastructure", href: '/staff/infrastructure/buildings', label: 'Buildings', icon: Building, roles: ['Staff Head'] },
-  { group: "Infrastructure", href: '/staff/infrastructure/rooms', label: 'Rooms', icon: Landmark, roles: ['Staff Head'] },
-  { group: "Course Operations", href: '/staff/courses/schedule', label: 'Scheduled Courses', icon: ListChecks, roles: ['Staff Head'] },
-  { group: "Course Operations", href: '/staff/students/manual-registration', label: 'Manual Registration', icon: FilePenLine, roles: ['Staff Head'] },
-  { group: "Communication", href: '/staff/communication/announcements/ai-assistant', label: 'AI Announcer', icon: Megaphone, roles: ['Staff Head'] }, // Changed group, still staff specific
-  { group: "System", href: '/staff/system/audit-log', label: 'Audit Log', icon: ShieldAlert, roles: ['Staff Head'] },
+  // Staff Head & Admin (Admin inherits Staff Head roles)
+  { group: "User Management", href: '/staff/users', label: 'Manage Users', icon: Users, roles: ['Staff Head', 'Admin'] },
+  { group: "Academic Structure", href: '/staff/departments', label: 'Departments', icon: School, roles: ['Staff Head', 'Admin'] },
+  { group: "Academic Structure", href: '/staff/courses/catalog', label: 'Course Catalog', icon: BookOpen, roles: ['Staff Head', 'Admin'] },
+  { group: "Academic Structure", href: '/staff/semesters', label: 'Semesters', icon: CalendarDays, roles: ['Staff Head', 'Admin'] },
+  { group: "Infrastructure", href: '/staff/infrastructure/buildings', label: 'Buildings', icon: Building, roles: ['Staff Head', 'Admin'] },
+  { group: "Infrastructure", href: '/staff/infrastructure/rooms', label: 'Rooms', icon: Landmark, roles: ['Staff Head', 'Admin'] },
+  { group: "Course Operations", href: '/staff/courses/schedule', label: 'Scheduled Courses', icon: ListChecks, roles: ['Staff Head', 'Admin'] },
+  { group: "Course Operations", href: '/staff/students/manual-registration', label: 'Manual Registration', icon: FilePenLine, roles: ['Staff Head', 'Admin'] },
+  { group: "Communication", href: '/staff/communication/announcements/ai-assistant', label: 'AI Announcer', icon: Megaphone, roles: ['Staff Head', 'Admin'] }, 
+  { group: "System", href: '/staff/system/audit-log', label: 'Audit Log', icon: ShieldAlert, roles: ['Staff Head', 'Admin'] },
 ];
 
 const groupedNavItems = (role: UserRole) => {
@@ -76,12 +77,16 @@ const groupedNavItems = (role: UserRole) => {
   const groups: Record<string, NavItem[]> = {};
   
   filtered.forEach(item => {
-    // Special handling for the common "Announcements" link
     if (item.label === 'Announcements') {
         if (role === 'Student') item.href = '/student/announcements';
         else if (role === 'Teacher') item.href = '/teacher/announcements';
-        else if (role === 'Staff Head') item.href = '/staff/announcements';
+        else if (role === 'Staff Head' || role === 'Admin') item.href = '/staff/announcements';
     }
+    // Ensure Staff Head and Admin share the same base path for staff functions
+    if ((role === 'Staff Head' || role === 'Admin') && item.href.startsWith('/staff/')) {
+        // Path is already correct for staff shared routes
+    }
+
     const groupName = item.group || "General";
     if (!groups[groupName]) {
       groups[groupName] = [];
@@ -111,7 +116,7 @@ export function SidebarNav() {
              <div className="px-4 pt-4 pb-1 text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider">{groupName}</div>
           )}
           {items.map((item) => {
-            const fullPath = item.href; // Path is now fully resolved in groupedNavItems
+            const fullPath = item.href; 
             const isActive = pathname === fullPath || (item.href !== '/dashboard' && !item.href.endsWith('/announcements') && pathname.startsWith(fullPath + (fullPath.endsWith('/') ? '' : '/')));
             const Icon = item.icon;
             
@@ -150,4 +155,3 @@ export function SidebarNav() {
     </SidebarMenu>
   );
 }
-

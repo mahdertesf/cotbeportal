@@ -1,4 +1,5 @@
 
+
 // Placeholder API functions
 // These functions simulate backend calls and should be replaced with actual API calls.
 
@@ -11,19 +12,40 @@ export async function handleLogin(username: string, password_hash: string, role:
   console.log('Attempting login for:', { username, role });
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
 
-  // TEMPORARY DEVELOPMENT BYPASS LOGIC
+  const user = mockDatabases.users.find(u => u.username === username && u.role === role);
+
+  if (user) {
+    // In a real app, compare password_hash with stored hash
+    // For mock, if user found by username and role, assume password matches
+    // Especially since default password is username
+    if (user.password_hash === `hashed_${password_hash}` || password_hash === user.username) {
+      if (!user.is_active) {
+        return { success: false, error: "Account is inactive. Please contact support.", data: null };
+      }
+       // Update last_login timestamp
+      const userIndex = mockDatabases.users.findIndex(u => u.user_id === user.user_id);
+      if (userIndex !== -1) {
+        mockDatabases.users[userIndex].last_login = new Date().toISOString();
+      }
+      return { success: true, data: { ...user, last_login: new Date().toISOString() }, error: null };
+    }
+    return { success: false, error: "Invalid username or password.", data: null };
+  }
+
+  // TEMPORARY DEVELOPMENT BYPASS LOGIC (if user not found in mock)
   if (!role) {
     return { success: false, error: "Role not selected", data: null };
   }
+  console.warn("User not found in mock database for login, attempting dev bypass for role:", role);
 
   const mockUserId = Math.floor(Math.random() * 10000);
   let mockUserData: UserProfile = {
     user_id: `user-${mockUserId}`,
-    username: username || `mock${role.toLowerCase().replace(' ', '')}${mockUserId}`,
+    username: username || `mock${role?.toLowerCase().replace(' ', '')}${mockUserId}`,
     email: `${username || 'mock'}@cotbe.edu`,
     role: role,
     first_name: 'Mock',
-    last_name: role,
+    last_name: role || 'User',
     is_active: true,
     date_joined: new Date().toISOString(),
     last_login: new Date().toISOString(),
@@ -34,7 +56,7 @@ export async function handleLogin(username: string, password_hash: string, role:
       ...mockUserData,
       department_id: `dept-${Math.floor(Math.random() * 5) + 1}`,
       department_name: `Department of Mock Studies ${Math.floor(Math.random() * 5) + 1}`,
-      enrollment_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), // Enrolled 1 year ago
+      enrollment_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), 
       date_of_birth: '2002-05-15',
       address: '123 Mockingbird Lane, Addis Ababa',
       phone_number: '0912345678',
@@ -42,17 +64,17 @@ export async function handleLogin(username: string, password_hash: string, role:
   } else if (role === 'Teacher') {
     mockUserData = {
       ...mockUserData,
-      user_id: `teacher-${mockUserId}`, // Ensure teacher IDs are distinct if needed for lookups
+      user_id: `teacher-${mockUserId}`, 
       department_id: `dept-${Math.floor(Math.random() * 5) + 1}`,
       department_name: `Department of Advanced Mocking ${Math.floor(Math.random() * 5) + 1}`,
       office_location: `Building ${Math.floor(Math.random() * 10) + 1}, Room ${Math.floor(Math.random() * 100) + 100}`,
       phone_number: '0987654321',
     };
-  } else if (role === 'Staff Head') {
+  } else if (role === 'Staff Head' || role === 'Admin') {
     mockUserData = {
       ...mockUserData,
-      job_title: 'Head of Mock Operations',
-      phone_number: '0977654321',
+      job_title: role === 'Admin' ? 'Portal Administrator' : 'Head of Mock Operations',
+      phone_number: role === 'Admin' ? '0900000000' : '0977654321',
     };
   }
   
@@ -62,7 +84,6 @@ export async function handleLogin(username: string, password_hash: string, role:
 export async function handleForgotPassword(email: string) {
   console.log('Forgot password for email:', email);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Simulate sending a reset link
   if (email.includes('@')) {
     return { success: true, message: 'If an account with that email exists, a password reset link has been sent.' };
   }
@@ -72,8 +93,8 @@ export async function handleForgotPassword(email: string) {
 export async function handleResetPassword(token: string, newPassword_hash: string) {
   console.log('Resetting password with token:', token);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Simulate resetting password
   if (token && newPassword_hash) {
+    // Find user by a mock token mechanism if desired, or just succeed
     return { success: true, message: 'Password has been reset successfully.' };
   }
   return { success: false, error: 'Invalid token or password.' };
@@ -82,15 +103,22 @@ export async function handleResetPassword(token: string, newPassword_hash: strin
 export async function handleChangePassword(userId: string | number, currentPassword_hash: string, newPassword_hash: string) {
   console.log('Changing password for user:', userId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Simulate password change logic
-  // In a real app, you'd verify currentPassword_hash against the stored hash
-  if (currentPassword_hash === "wrong_password") { // Simple mock check
+  const userIndex = mockDatabases.users.findIndex(u => String(u.user_id) === String(userId));
+
+  if (userIndex === -1) {
+    return { success: false, error: 'User not found.' };
+  }
+  const user = mockDatabases.users[userIndex];
+
+  // Mock password check: current password should be the username or the actual "hashed" password
+  if (user.password_hash !== `hashed_${currentPassword_hash}` && currentPassword_hash !== user.username) {
     return { success: false, error: 'Incorrect current password.' };
   }
   if (newPassword_hash.length < 6) {
     return { success: false, error: 'New password must be at least 6 characters long.' };
   }
-  // Simulate successful password update
+  
+  mockDatabases.users[userIndex].password_hash = `hashed_${newPassword_hash}`; // Simulate hashing
   return { success: true, message: 'Password changed successfully.' };
 }
 
@@ -99,18 +127,16 @@ export async function handleChangePassword(userId: string | number, currentPassw
 export async function fetchAllUsers(): Promise<UserProfile[]> {
   console.log('Fetching all users');
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Ensure mockUsers includes necessary fields for Student, Teacher, Staff roles
-  const mockUsers: UserProfile[] = [
-    { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
-    { user_id: 'teacher-1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-2', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
-    { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100" },
-    { user_id: 'stud2', username: 'student.two', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333" },
-    { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-3', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
-    { user_id: 'teacher-2', username: 'teacher.two', email: 't2@cotbe.edu', role: 'Teacher', first_name: 'Solomon', last_name: 'Gizaw', is_active: true, date_joined: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", office_location: "Block A, Room 105", phone_number: "0912987654" },
-  ];
-  // Store these in mockDatabases if not already, for consistency.
   if (!mockDatabases.users || mockDatabases.users.length === 0) {
-    mockDatabases.users = JSON.parse(JSON.stringify(mockUsers));
+     mockDatabases.users = [
+      { user_id: 'admin', username: 'admin', email: 'admin@cotbe.edu', role: 'Admin', first_name: 'Portal', last_name: 'Admin', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "System Administrator", phone_number: "0900000000", password_hash: "hashed_admin" },
+      { user_id: 'stud1', username: 'stud1', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111", password_hash: "hashed_stud1" },
+      { user_id: 'teacher-1', username: 'teacher-1', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-2', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222", password_hash: "hashed_teacher-1" },
+      { user_id: 'staff1', username: 'staff1', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100", password_hash: "hashed_staff1" },
+      { user_id: 'stud2', username: 'stud2', email: 's2@cotbe.edu', role: 'Student', first_name: 'Hana', last_name: 'Girma', is_active: true, date_joined: new Date(Date.now() - 150 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2023-03-15", date_of_birth: "2004-01-20", address: "Bole, Addis Ababa", phone_number: "0933333333", password_hash: "hashed_stud2" },
+      { user_id: 'stud3', username: 'stud3', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-3', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444", password_hash: "hashed_stud3" },
+      { user_id: 'teacher-2', username: 'teacher-2', email: 't2@cotbe.edu', role: 'Teacher', first_name: 'Solomon', last_name: 'Gizaw', is_active: true, date_joined: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", office_location: "Block A, Room 105", phone_number: "0912987654", password_hash: "hashed_teacher-2" },
+    ];
   }
   return JSON.parse(JSON.stringify(mockDatabases.users));
 }
@@ -122,7 +148,6 @@ export async function fetchStudentProfile(userId: string | number) {
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   const user = (await fetchAllUsers()).find(u => String(u.user_id) === String(userId) && u.role === 'Student');
   if (user) return user;
-  // Fallback mock student profile data if not found in main list
   return {
     user_id: userId,
     username: 'teststudent',
@@ -177,7 +202,7 @@ export async function fetchAvailableCourses(filters?: any) {
       max_capacity: sc.max_capacity,
       current_enrollment: sc.current_enrollment,
       description: courseDetail?.description || '',
-      prerequisites: [], // Mock prerequisites if needed
+      prerequisites: [], 
     };
   });
 }
@@ -185,21 +210,18 @@ export async function fetchAvailableCourses(filters?: any) {
 export async function handleRegisterCourse(scheduledCourseId: string) {
   console.log('Registering for course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Add to mockRegistrations array if needed
   return { success: true, message: `Successfully registered for course ${scheduledCourseId}.` };
 }
 
 export async function handleDropCourse(registrationId: string) {
   console.log('Dropping course registration:', registrationId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Remove from mockRegistrations array if needed
   return { success: true, message: `Successfully dropped course ${registrationId}.` };
 }
 
 export async function fetchStudentRegisteredCourses(studentId: string | number) {
   console.log('Fetching registered courses for student:', studentId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Filter mockDatabases.registrations by studentId
   const studentRegs = mockDatabases.registrations.filter(reg => String(reg.student_id) === String(studentId));
   const scheduledCourses = await fetchItems('scheduledCourses');
   const catalog = await fetchItems('courses');
@@ -231,9 +253,7 @@ export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
 export async function fetchStudentAssessments(scheduledCourseId: string, studentId: string | number) {
     console.log('Fetching assessments for student:', studentId, 'in course:', scheduledCourseId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    // This should fetch from StudentAssessments table based on registration_id (linked to student and scheduled course)
     const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
-    // For mock, let's return some of these course assessments, maybe with random scores
     return courseAssessments.map((asm: any) => ({
         assessment_id: asm.id,
         name: asm.name,
@@ -361,20 +381,21 @@ export async function updateTeacherProfile(userId: string | number, data: Partia
     return { success: false, error: "Teacher not found", data: null };
 }
 
-// --- Staff Head ---
+// --- Staff Head / Admin ---
 export async function fetchStaffProfile(userId: string | number) {
-    console.log('Fetching staff profile for:', userId);
+    console.log('Fetching staff/admin profile for:', userId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    const user = (await fetchAllUsers()).find(u => String(u.user_id) === String(userId) && u.role === 'Staff Head');
+    const user = (await fetchAllUsers()).find(u => String(u.user_id) === String(userId) && (u.role === 'Staff Head' || u.role === 'Admin'));
     if (user) return user;
+    // Generic fallback, role should be correct from fetchAllUsers
     return {
         user_id: userId,
-        username: 'teststaff',
-        email: 'teststaff@cotbe.edu',
+        username: 'teststaffadmin',
+        email: 'teststaffadmin@cotbe.edu',
         first_name: 'Test',
-        last_name: 'Staff',
-        role: 'Staff Head',
-        job_title: 'Head of Administration',
+        last_name: 'StaffAdmin',
+        role: 'Staff Head', // Default if not found
+        job_title: 'Portal Admin',
         phone_number: '0977654321',
         is_active: true,
         date_joined: new Date().toISOString(),
@@ -383,21 +404,20 @@ export async function fetchStaffProfile(userId: string | number) {
 }
 
 export async function updateStaffProfile(userId: string | number, data: Partial<UserProfile>) {
-    console.log('Updating staff profile for:', userId, 'with data:', data);
+    console.log('Updating staff/admin profile for:', userId, 'with data:', data);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    const userIndex = mockDatabases.users.findIndex(u => String(u.user_id) === String(userId) && u.role === 'Staff Head');
+    const userIndex = mockDatabases.users.findIndex(u => String(u.user_id) === String(userId) && (u.role === 'Staff Head' || u.role === 'Admin'));
     if (userIndex !== -1) {
         mockDatabases.users[userIndex] = { ...mockDatabases.users[userIndex], ...data };
         return { success: true, data: mockDatabases.users[userIndex] };
     }
-    return { success: false, error: "Staff not found", data: null };
+    return { success: false, error: "Staff/Admin user not found", data: null };
 }
 
 
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
     console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    // Filter scheduledCourses by teacherId
     const allScheduled = await fetchItems('scheduledCourses');
     const courses = await fetchItems('courses');
     
@@ -418,14 +438,11 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
     console.log('Fetching student roster for course:', scheduledCourseId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
     
-    // Get all registrations for this scheduled course
     const registrationsForCourse = mockDatabases.registrations.filter(
       reg => String(reg.scheduled_course_id) === String(scheduledCourseId) && reg.status === 'Registered'
     );
     const studentIds = registrationsForCourse.map(reg => reg.student_id);
-
-    // Get student details for these student IDs
-    const allStudents = await fetchAllUsers(); // Assuming this returns all users
+    const allStudents = await fetchAllUsers(); 
     const roster = allStudents
       .filter(user => user.role === 'Student' && studentIds.includes(String(user.user_id)))
       .map(studentUser => ({
@@ -437,7 +454,6 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
       
     if (roster.length > 0) return roster;
 
-    // Fallback mock data if no registrations found for simplicity in current mock setup
     if (scheduledCourseId === 'sc-fall24-cs101-a' || scheduledCourseId === 'sc-fall24-ee305-a' || scheduledCourseId === 'sc-fall24-ee305-b') {
         return [
             { student_id: 'stud1', first_name: 'Abebe', last_name: 'Bekele', email: 'abebe@example.com' },
@@ -453,7 +469,6 @@ export async function createCourseMaterial(scheduledCourseId: string, materialDa
     return { success: true, data: { id: `cm-${Math.random()}`, ...materialData } };
 }
 
-// Used by TeacherCourseManagementPage - FinalGradesSubmission
 export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{
   registration_id: string;
   student_id: string;
@@ -486,16 +501,12 @@ export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseI
   });
 }
 
-// Used by TeacherCourseManagementPage - FinalGradesSubmission
 export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId: string): Promise<Record<string, Record<string, { score: number | null; feedback: string | null }>>> {
   console.log('Fetching all student assessment scores for course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
 
   const mockScores: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
-
-  // Use dynamic course ID for assessment lookup
   const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
-  // Get students registered for this course
   const registrations = mockDatabases.registrations.filter(r => String(r.scheduled_course_id) === String(scheduledCourseId));
 
   registrations.forEach(reg => {
@@ -504,12 +515,10 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
         const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
         let score: number | null = null;
         let feedback: string | null = "Mock feedback provided.";
-
-        // Simulate some scores, make some null
-        if (Math.random() > 0.3) { // 70% chance of having a score
-            score = Math.floor(Math.random() * maxScore * 0.6 + maxScore * 0.4); // Score between 40% and 100%
+        if (Math.random() > 0.3) { 
+            score = Math.floor(Math.random() * maxScore * 0.6 + maxScore * 0.4); 
         } else {
-            feedback = null; // No feedback if not graded
+            feedback = null; 
         }
         mockScores[reg.student_id][asm.id] = { score, feedback };
       });
@@ -557,11 +566,11 @@ let mockDatabases: Record<string, any[]> = {
     { scheduled_course_id: 'sc-fall24-ee305-b', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-5', section_number: 'B', max_capacity: 25, current_enrollment: 0, days_of_week: 'TTH', start_time: '10:00', end_time: '11:15' },
     { scheduled_course_id: 'sc-spring25-cs350-a', course_id: 'course-4', semester_id: 'sem-2', teacher_id: 'teacher-2', room_id: 'room-2', section_number: 'A', max_capacity: 30, current_enrollment: 0, days_of_week: 'MW', start_time: '14:00', end_time: '15:15' },
   ],
-  users: [], // Populated by fetchAllUsers directly
-  teachers: [], // Populated by fetchItems('teachers') from fetchAllUsers
+  users: [], 
+  teachers: [], 
   assessments: {}, 
   registrations: [],
-  announcements: [ // Added mock announcements
+  announcements: [
     { announcement_id: 'anno-1', title: 'Welcome to Fall 2024 Semester!', content: 'We are excited to welcome all new and returning students to the Fall 2024 semester. Please check your course schedules and familiarize yourself with the portal.', author_id: 'staff1', target_audience: 'All Portal Users', status: 'Published', publish_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { announcement_id: 'anno-2', title: 'CS Department Meeting', content: 'There will be a mandatory meeting for all Computer Science students on September 5th at 2 PM in Room 101.', author_id: 'teacher-2', target_audience: 'Specific Department Students', status: 'Published', publish_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { announcement_id: 'anno-3', title: 'Faculty Workshop on New Grading Policy', content: 'All faculty members are invited to a workshop on the new grading policy. Date: September 10th, 10 AM. Venue: Admin Conference Hall.', author_id: 'staff1', target_audience: 'All Teachers', status: 'Published', publish_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
@@ -570,7 +579,6 @@ let mockDatabases: Record<string, any[]> = {
   ],
 };
 
-// Initialize assessments for scheduled courses
 mockDatabases.scheduledCourses.forEach(sc => {
     const courseIdKey = `assessments?courseId=${sc.scheduled_course_id}`;
     if (!mockDatabases.assessments[courseIdKey]) {
@@ -587,22 +595,21 @@ export async function fetchItems(entity: string, filters?: any) {
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
 
   if (mockDatabases[entity]) {
-    return JSON.parse(JSON.stringify(mockDatabases[entity])); // Return a deep copy
+    return JSON.parse(JSON.stringify(mockDatabases[entity])); 
   }
-  if (entity === 'teachers') { // Special handling for teachers from users
+  if (entity === 'teachers') { 
     const allUsers = await fetchAllUsers();
     return allUsers
         .filter(user => user.role === 'Teacher')
         .map(user => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name, department_id: user.department_id }));
   }
-  if (entity.startsWith('assessments?courseId=')) { // Assessments per course
+  if (entity.startsWith('assessments?courseId=')) { 
     return JSON.parse(JSON.stringify(mockDatabases.assessments[entity] || []));
   }
   return [];
 }
 
 
-// Kept for fetching student's own old grades if needed, but FinalGradesSubmission uses fetchStudentRegistrationsForCourseGrading
 export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; final_grade: string | null; grade_points: number | null }>> {
   console.log('Fetching final grades for course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
@@ -621,23 +628,31 @@ export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  const newId = `${entity.slice(0,4)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   
   let newItem = { ...data };
+  
   if (entity === 'users') {
-     newItem = {
-        user_id: newId, // Users have user_id
+    // Ensure username (ID) is unique for new users
+    if (mockDatabases.users.some(u => u.username === data.username)) {
+        return { success: false, error: `Username/ID "${data.username}" already exists.`, data: null };
+    }
+    newItem = {
+        user_id: data.username, // Use username as user_id for new users as per requirement
         is_active: true,
         date_joined: new Date().toISOString(),
-        last_login: new Date().toISOString(),
+        last_login: null, // New user hasn't logged in
+        password_hash: `hashed_${data.username}`, // Default password is username (mock hashed)
         ...data,
     } as UserProfile;
   } else if (entity === 'scheduledCourses') {
+    const newId = `sc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     newItem = { scheduled_course_id: newId, current_enrollment: 0, ...data };
-  } else if (entity === 'announcements') { // Handle announcement creation
+  } else if (entity === 'announcements') { 
+     const newId = `anno-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
      newItem = { announcement_id: newId, status: 'Draft', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...data };
   } else {
-    newItem = { ...data, id: newId }; // Most other entities use 'id'
+    const newId = `${entity.slice(0,4)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    newItem = { ...data, id: newId }; 
   }
 
   if (mockDatabases[entity]) {
@@ -659,12 +674,14 @@ export async function updateItem(entity: string, id: string | number, data: any)
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   
   let itemUpdated = false;
+  let updatedItemData = null;
   const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const index = mockDatabases[entity].findIndex((item: any) => String(item[idKey]) === String(id));
     if (index !== -1) {
       mockDatabases[entity][index] = { ...mockDatabases[entity][index], ...data, updated_at: new Date().toISOString() };
+      updatedItemData = mockDatabases[entity][index];
       itemUpdated = true;
     }
   } else if (entity.startsWith('assessments?courseId=')) {
@@ -672,6 +689,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
           const index = mockDatabases.assessments[entity].findIndex((item: any) => String(item.id) === String(id));
            if (index !== -1) {
              mockDatabases.assessments[entity][index] = { ...mockDatabases.assessments[entity][index], ...data };
+             updatedItemData = mockDatabases.assessments[entity][index];
              itemUpdated = true;
            }
       }
@@ -683,20 +701,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
     return { success: false, error: "Item not found", data: null };
   }
   
-  if (entity === 'users') {
-     const updatedUser: Partial<UserProfile> = { [idKey]: id, ...data };
-     return { success: true, data: updatedUser, error: null};
-  }
-  if (entity === 'registrations') { 
-    console.log(`Mock DB: Registration ${id} updated with final_grade: ${data.final_grade}, grade_points: ${data.grade_points}`);
-    const regIndex = mockDatabases.registrations.findIndex(r => String(r.registration_id) === String(id));
-    if(regIndex !== -1) {
-      mockDatabases.registrations[regIndex] = {...mockDatabases.registrations[regIndex], ...data, updated_at: new Date().toISOString()};
-      return { success: true, data: mockDatabases.registrations[regIndex] };
-    }
-    return { success: false, error: "Registration not found for update." };
-  }
-  return { success: true, data: { [idKey]: id, ...data }, error: null};
+  return { success: true, data: updatedItemData, error: null};
 }
 
 export async function deleteItem(entity: string, id: string | number) {
@@ -727,11 +732,12 @@ export async function fetchAuditLogs(filters?: any) {
     console.log('Fetching audit logs with filters:', filters);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
     const defaultLogs = [
-        { id: 'log1', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff.one', action_type: 'USER_LOGIN', target_entity_type: 'USER', target_entity_id: 'staff1', ip_address: '192.168.1.10', details: 'User logged in successfully' },
-        { id: 'log2', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'teacher.one', action_type: 'COURSE_MATERIAL_UPLOAD', target_entity_type: 'COURSE_MATERIAL', target_entity_id: 'cm-123', ip_address: '10.0.0.5', details: 'Uploaded "Lecture 5.pdf" to EE305' },
-        { id: 'log3', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'student.one', action_type: 'COURSE_REGISTRATION', target_entity_type: 'REGISTRATION', target_entity_id: 'reg-sc1-stud1', ip_address: '203.0.113.45', details: 'Registered for CS101' },
-        { id: 'log4', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff.one', action_type: 'USER_UPDATE', target_entity_type: 'USER', target_entity_id: 'stud3', ip_address: '192.168.1.10', details: 'Deactivated user student.three' },
-        { id: 'log5', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'teacher.one', action_type: 'ASSESSMENT_GRADE_UPDATE', target_entity_type: 'STUDENT_ASSESSMENT', target_entity_id: 'sa-stud1-asmMock1', ip_address: '10.0.0.5', details: 'Graded Quiz 1 for Abebe Bekele in EE305' },
+        { id: 'log1', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff1', action_type: 'USER_LOGIN', target_entity_type: 'USER', target_entity_id: 'staff1', ip_address: '192.168.1.10', details: 'User logged in successfully' },
+        { id: 'log2', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'teacher-1', action_type: 'COURSE_MATERIAL_UPLOAD', target_entity_type: 'COURSE_MATERIAL', target_entity_id: 'cm-123', ip_address: '10.0.0.5', details: 'Uploaded "Lecture 5.pdf" to EE305' },
+        { id: 'log3', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'stud1', action_type: 'COURSE_REGISTRATION', target_entity_type: 'REGISTRATION', target_entity_id: 'reg-sc1-stud1', ip_address: '203.0.113.45', details: 'Registered for CS101' },
+        { id: 'log4', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff1', action_type: 'USER_UPDATE', target_entity_type: 'USER', target_entity_id: 'stud3', ip_address: '192.168.1.10', details: 'Deactivated user stud3' },
+        { id: 'log5', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'teacher-1', action_type: 'ASSESSMENT_GRADE_UPDATE', target_entity_type: 'STUDENT_ASSESSMENT', target_entity_id: 'sa-stud1-asmMock1', ip_address: '10.0.0.5', details: 'Graded Quiz 1 for Abebe Bekele in EE305' },
+        { id: 'log6', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'admin', action_type: 'USER_CREATE', target_entity_type: 'USER', target_entity_id: 'staff2', ip_address: '192.168.1.1', details: 'Admin created new staff user staff2' },
     ];
     const limit = filters?.limit || 50;
     return defaultLogs.slice(0, limit);
@@ -741,7 +747,6 @@ export async function handleManualStudentRegistration(studentId: string, schedul
   console.log(`Manually registering student ${studentId} for scheduled course ${scheduledCourseId}`);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
 
-  // Check if already registered
   const existingRegistration = mockDatabases.registrations.find(
     reg => String(reg.student_id) === String(studentId) && String(reg.scheduled_course_id) === String(scheduledCourseId)
   );
@@ -760,19 +765,17 @@ export async function handleManualStudentRegistration(studentId: string, schedul
     console.warn(`Manual registration for ${studentId} in ${scheduledCourseId} exceeded capacity.`);
   }
   
-  // Add to registrations
   const newRegistration = {
     registration_id: `reg-${Date.now()}`,
     student_id: studentId,
     scheduled_course_id: scheduledCourseId,
     registration_date: new Date().toISOString(),
-    status: 'Registered', // Manual registration directly registers
+    status: 'Registered', 
     final_grade: null,
     grade_points: null,
   };
   mockDatabases.registrations.push(newRegistration);
 
-  // Update enrollment count
   const scIndex = mockDatabases.scheduledCourses.findIndex(sc => String(sc.scheduled_course_id) === String(scheduledCourseId));
   if (scIndex !== -1) {
     mockDatabases.scheduledCourses[scIndex].current_enrollment += 1;
@@ -781,7 +784,6 @@ export async function handleManualStudentRegistration(studentId: string, schedul
   return { success: true, message: message };
 }
 
-// Announcements API
 export async function fetchAnnouncements({ role, departmentId }: { role: UserRole, departmentId?: string | number }) {
   console.log(`Fetching announcements for role: ${role}, departmentId: ${departmentId}`);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
@@ -795,20 +797,25 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
     if (ann.target_audience === 'All Portal Users') return true;
     if (role === 'Student' && ann.target_audience === 'All Students') return true;
     if (role === 'Teacher' && ann.target_audience === 'All Teachers') return true;
-    if (role === 'Staff Head' && ann.target_audience === 'All Staff') return true;
+    if ((role === 'Staff Head' || role === 'Admin') && ann.target_audience === 'All Staff') return true; // Admin sees Staff announcements
     
     if (role === 'Student' && ann.target_audience === 'Specific Department Students' && String(ann.department_id) === String(departmentId)) return true;
     if (role === 'Teacher' && ann.target_audience === 'Specific Department Faculty' && String(ann.department_id) === String(departmentId)) return true;
     
+    // Staff Heads and Admins should also see department specific announcements if they belong to that dept
+    // This part might need more refined logic based on how staff/admin department affiliation is stored or determined.
+    // For now, assume Staff Head/Admin don't filter by department for their own announcements but see all relevant to staff/all.
+
     return false;
   });
 
-  // Sort by publish date descending
   relevantAnnouncements.sort((a, b) => new Date(b.publish_date).getTime() - new Date(a.publish_date).getTime());
   
   return relevantAnnouncements;
 }
     
-
-
+// Initialize mock users if empty
+if (!mockDatabases.users || mockDatabases.users.length === 0) {
+  fetchAllUsers(); // This will populate mockDatabases.users
+}
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type UserRole = 'Student' | 'Teacher' | 'Staff Head' | null;
+export type UserRole = 'Student' | 'Teacher' | 'Staff Head' | 'Admin' | null;
 
 export interface UserProfile {
   // Common fields from Users table
@@ -27,7 +27,7 @@ export interface UserProfile {
   office_location?: string;
   // phone_number is common with Student
 
-  // Staff specific
+  // Staff specific (and Admin)
   job_title?: string;
 }
 

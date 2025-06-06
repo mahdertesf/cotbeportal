@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { AuthFormCard } from '@/components/auth/AuthFormCard';
-import { handleLogin } from '@/lib/api'; // Placeholder for actual API call
+import { handleLogin } from '@/lib/api'; 
 import { Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -28,7 +28,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      // If user is already logged in, redirect to dashboard
       router.push('/dashboard');
     }
   }, [user, router]);
@@ -48,8 +47,6 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    // TEMPORARY DEVELOPMENT BYPASS
-    // In production, this will call the actual backend API
     try {
       const { success, data, error } = await handleLogin(username, password, selectedRole);
 
@@ -59,7 +56,16 @@ export default function LoginPage() {
           title: "Login Successful",
           description: `Welcome, ${data.first_name}! Redirecting to dashboard...`,
         });
-        router.push('/dashboard'); // Redirect to a generic dashboard, which will then redirect by role
+        // Admin and Staff Head share the same dashboard redirect for now
+        if (data.role === 'Admin' || data.role === 'Staff Head') {
+            router.push('/staff/dashboard');
+        } else if (data.role === 'Teacher') {
+            router.push('/teacher/dashboard');
+        } else if (data.role === 'Student') {
+            router.push('/student/dashboard');
+        } else {
+            router.push('/dashboard');
+        }
       } else {
         setError(error || 'Login failed. Please check your credentials and role.');
         toast({
@@ -100,9 +106,10 @@ export default function LoginPage() {
               <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Student">Student</SelectItem>
-              <SelectItem value="Teacher">Teacher</SelectItem>
+              <SelectItem value="Admin">Admin</SelectItem>
               <SelectItem value="Staff Head">Staff Head</SelectItem>
+              <SelectItem value="Teacher">Teacher</SelectItem>
+              <SelectItem value="Student">Student</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -113,7 +120,7 @@ export default function LoginPage() {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="e.g. johndoe"
+            placeholder="e.g. johndoe or your ID"
             // required (can be lenient during bypass)
           />
         </div>
@@ -135,7 +142,8 @@ export default function LoginPage() {
       </form>
       <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md text-sm">
         <p className="font-bold">DEVELOPMENT NOTE:</p>
-        <p>Login is currently using a temporary bypass. Username and password fields are optional. Select a role and click Login to proceed with mock data.</p>
+        <p>Login is currently using a temporary bypass. Username and password fields are optional for some roles. Select a role and click Login to proceed with mock data.</p>
+         <p className="mt-1">Default username/password (if not bypassing): admin/admin, staff.one/staff.one, teacher.one/teacher.one, student.one/student.one</p>
         <p className="font-bold text-red-600 mt-2">CRITICAL SECURITY WARNING: This bypass MUST be removed for production.</p>
       </div>
     </AuthFormCard>

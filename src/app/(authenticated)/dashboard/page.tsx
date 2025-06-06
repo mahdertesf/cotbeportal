@@ -21,12 +21,13 @@ export default function DashboardRedirectPage() {
         case 'Staff Head':
           router.replace('/staff/dashboard');
           break;
+        case 'Admin': // Admin uses staff dashboard
+          router.replace('/staff/dashboard');
+          break;
         default:
-          // Fallback or error if role is unrecognized, though unlikely if login is correct
           router.replace('/login'); 
       }
     } else if (!user) {
-      // If no user somehow (e.g., state cleared), redirect to login
       router.replace('/login');
     }
   }, [user, router]);

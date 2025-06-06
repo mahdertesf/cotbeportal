@@ -15,27 +15,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { fetchAllUsers, createItem, updateItem } from '@/lib/api';
-import type { UserProfile, UserRole } from '@/stores/appStore';
-import { Loader2, PlusCircle, Edit, Filter, Search } from 'lucide-react';
+import useAppStore, { type UserProfile, type UserRole } from '@/stores/appStore';
+import { Loader2, PlusCircle, Edit, Filter, Search, Info } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const userFormSchema = z.object({
-  user_id: z.string().optional(), // Present when editing
-  username: z.string().min(3, "Username must be at least 3 characters"),
+  user_id: z.string().optional(), 
+  username: z.string().min(3, "Username must be at least 3 characters (this will also be their ID).").max(100),
   email: z.string().email("Invalid email address"),
   first_name: z.string().min(1, "First name is required"),
   last_name: z.string().min(1, "Last name is required"),
-  role: z.enum(['Student', 'Teacher', 'Staff Head'], { required_error: "Role is required" }),
-  password: z.string().optional(), // Required for new users, optional for edit
+  role: z.enum(['Student', 'Teacher', 'Staff Head', 'Admin'], { required_error: "Role is required" }),
   is_active: z.boolean().default(true),
-}).superRefine((data, ctx) => {
-  if (!data.user_id && (!data.password || data.password.length < 6)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Password must be at least 6 characters for new users",
-      path: ["password"],
-    });
-  }
+  // Password field removed, handled by backend/API default
 });
 
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -43,6 +35,7 @@ type UserFormData = z.infer<typeof userFormSchema>;
 const ALL_ROLES_FILTER = "all_roles_filter_value";
 
 export default function UserManagementPage() {
+  const loggedInUser = useAppStore((state) => state.user);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,7 +55,6 @@ export default function UserManagementPage() {
       first_name: '',
       last_name: '',
       role: undefined,
-      password: '',
       is_active: true,
     },
   });
@@ -92,12 +84,11 @@ export default function UserManagementPage() {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        role: user.role as UserRole, // Ensure UserRole is one of the enum values
+        role: user.role as UserRole,
         is_active: user.is_active,
-        password: '', // Password not pre-filled for editing
       });
     } else {
-      form.reset(); // Reset to default for new user
+      form.reset({ username: '', email: '', first_name: '', last_name: '', role: undefined, is_active: true });
     }
     setIsDialogOpen(true);
   };
@@ -106,31 +97,28 @@ export default function UserManagementPage() {
     setIsSubmitting(true);
     try {
       let response;
-      const payload: Partial<UserProfile> = {
-        username: data.username,
+      const payload: Partial<UserProfile> & { password?: string } = {
+        username: data.username, // Username will also be used as default ID and password by mock API
         email: data.email,
         first_name: data.first_name,
         last_name: data.last_name,
         role: data.role,
         is_active: data.is_active,
       };
-      if (data.password && data.password.length > 0) {
-        // In a real app, hash this password before sending to backend
-        payload.password_hash = `hashed_${data.password}`; 
-      }
+      
+      // For new users, the mock API will use username as default password
+      // For editing, password is not changed here.
 
       if (editingUser && data.user_id) {
         response = await updateItem('users', data.user_id, payload);
         toast({ title: "Success", description: "User updated successfully." });
       } else {
-        // Ensure password is provided for new user (schema handles this but good to double check)
-        if (!payload.password_hash) throw new Error("Password required for new user.");
-        response = await createItem('users', payload);
-        toast({ title: "Success", description: "User created successfully." });
+        response = await createItem('users', payload); // API handles default password
+        toast({ title: "Success", description: `User created. Default password is their username: ${data.username}` });
       }
       
       if (response.success) {
-        loadUsers(); // Reload users after successful operation
+        loadUsers(); 
         setIsDialogOpen(false);
       } else {
         toast({ title: "Error", description: response.error || "Failed to save user.", variant: "destructive" });
@@ -142,11 +130,20 @@ export default function UserManagementPage() {
     }
   };
 
-  const toggleUserStatus = async (user: UserProfile) => {
+  const toggleUserStatus = async (userToToggle: UserProfile) => {
+    // Prevent Admin from deactivating themselves if they are the only one
+    if (userToToggle.role === 'Admin' && userToToggle.user_id === loggedInUser?.user_id) {
+        const adminCount = users.filter(u => u.role === 'Admin' && u.is_active).length;
+        if (adminCount <= 1 && !userToToggle.is_active === false) { // Trying to deactivate
+            toast({ title: "Action Denied", description: "Cannot deactivate the only active Admin.", variant: "destructive" });
+            return;
+        }
+    }
+
     try {
-      const newStatus = !user.is_active;
-      await updateItem('users', user.user_id, { is_active: newStatus });
-      toast({ title: "Success", description: `User ${user.first_name} ${newStatus ? 'activated' : 'deactivated'}.` });
+      const newStatus = !userToToggle.is_active;
+      await updateItem('users', userToToggle.user_id, { is_active: newStatus });
+      toast({ title: "Success", description: `User ${userToToggle.first_name} ${newStatus ? 'activated' : 'deactivated'}.` });
       loadUsers();
     } catch (error) {
       toast({ title: "Error", description: "Failed to update user status.", variant: "destructive" });
@@ -174,6 +171,17 @@ export default function UserManagementPage() {
     </TableRow>
   );
 
+  const getCreatableRoles = (): UserRole[] => {
+    if (loggedInUser?.role === 'Admin') {
+      return ['Student', 'Teacher', 'Staff Head'];
+    }
+    if (loggedInUser?.role === 'Staff Head') {
+      return ['Student', 'Teacher'];
+    }
+    return [];
+  };
+  const creatableRoles = getCreatableRoles();
+
   return (
     <div className="space-y-6">
       <Card>
@@ -183,9 +191,11 @@ export default function UserManagementPage() {
               <CardTitle className="font-headline text-2xl">User Management</CardTitle>
               <CardDescription>Manage all CoTBE portal users and their roles.</CardDescription>
             </div>
-            <Button onClick={() => handleOpenDialog(null)}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New User
-            </Button>
+            {creatableRoles.length > 0 && (
+                <Button onClick={() => handleOpenDialog(null)}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add New User
+                </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -193,7 +203,7 @@ export default function UserManagementPage() {
             <h3 className="text-lg font-semibold mb-3 font-headline">Filters & Search</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
               <div>
-                <Label htmlFor="search-user" className="block text-sm font-medium text-muted-foreground mb-1">Search by Name, Email, or Username</Label>
+                <Label htmlFor="search-user" className="block text-sm font-medium text-muted-foreground mb-1">Search by Name, Email, or Username/ID</Label>
                 <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -214,9 +224,10 @@ export default function UserManagementPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ALL_ROLES_FILTER}>All Roles</SelectItem>
-                    <SelectItem value="Student">Student</SelectItem>
-                    <SelectItem value="Teacher">Teacher</SelectItem>
+                    <SelectItem value="Admin">Admin</SelectItem>
                     <SelectItem value="Staff Head">Staff Head</SelectItem>
+                    <SelectItem value="Teacher">Teacher</SelectItem>
+                    <SelectItem value="Student">Student</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -227,7 +238,7 @@ export default function UserManagementPage() {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Username</TableHead>
+                        <TableHead>Username/ID</TableHead>
                         <TableHead>Full Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
@@ -243,7 +254,7 @@ export default function UserManagementPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Username</TableHead>
+                  <TableHead>Username/ID</TableHead>
                   <TableHead>Full Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
@@ -267,9 +278,11 @@ export default function UserManagementPage() {
                       <Button variant="outline" size="sm" onClick={() => handleOpenDialog(user)}>
                         <Edit className="mr-1 h-4 w-4" /> Edit
                       </Button>
-                      <Button variant={user.is_active ? "destructive" : "default"} size="sm" onClick={() => toggleUserStatus(user)}>
-                        {user.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
+                       {!(user.role === 'Admin' && user.user_id === loggedInUser?.user_id && users.filter(u => u.role === 'Admin' && u.is_active).length <= 1 && user.is_active) && ( // Prevent deactivating only admin
+                        <Button variant={user.is_active ? "destructive" : "default"} size="sm" onClick={() => toggleUserStatus(user)}>
+                            {user.is_active ? 'Deactivate' : 'Activate'}
+                        </Button>
+                       )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -282,19 +295,19 @@ export default function UserManagementPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          if (!open) form.reset(); // Reset form if dialog is closed without submitting
+          if (!open) form.reset(); 
           setIsDialogOpen(open);
         }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-headline">{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
             <DialogDescription>
-              {editingUser ? 'Modify the user details below.' : 'Fill in the details to create a new user.'}
+              {editingUser ? 'Modify the user details below. Username/ID cannot be changed.' : 'Fill in the details to create a new user.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
             <div>
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Username/ID</Label>
               <Input id="username" {...form.register('username')} readOnly={!!editingUser} />
               {form.formState.errors.username && <p className="text-sm text-destructive mt-1">{form.formState.errors.username.message}</p>}
             </div>
@@ -317,28 +330,47 @@ export default function UserManagementPage() {
             </div>
             <div>
               <Label htmlFor="role">Role</Label>
-              <Select onValueChange={(value) => form.setValue('role', value as UserRole)} defaultValue={form.getValues('role')}>
+              <Select 
+                onValueChange={(value) => form.setValue('role', value as UserRole)} 
+                defaultValue={form.getValues('role')}
+                disabled={!!editingUser && loggedInUser?.role !== 'Admin' && editingUser.role === 'Staff Head'} // Staff Head cannot change role of other Staff Heads
+                // Admin can change roles, but be cautious with demoting other Admins if this is added
+              >
                 <SelectTrigger id="role">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Student">Student</SelectItem>
-                  <SelectItem value="Teacher">Teacher</SelectItem>
-                  <SelectItem value="Staff Head">Staff Head</SelectItem>
+                  {creatableRoles.map(roleValue => (
+                    <SelectItem key={roleValue} value={roleValue!}>{roleValue}</SelectItem>
+                  ))}
+                   {/* If editing, show current role even if not creatable by current user, unless it's Staff Head being edited by non-Admin */}
+                  {editingUser && !creatableRoles.includes(editingUser.role) && editingUser.role && (
+                     <SelectItem value={editingUser.role} disabled>{editingUser.role} (Cannot change to this role)</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               {form.formState.errors.role && <p className="text-sm text-destructive mt-1">{form.formState.errors.role.message}</p>}
             </div>
+            
             {!editingUser && (
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" {...form.register('password')} />
-                {form.formState.errors.password && <p className="text-sm text-destructive mt-1">{form.formState.errors.password.message}</p>}
-                 <p className="text-xs text-muted-foreground mt-1">Required for new users (min 6 characters). For existing users, password changes are handled separately.</p>
+              <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-md text-sm space-y-1">
+                  <div className="flex items-center">
+                    <Info className="mr-2 h-4 w-4" />
+                    <span className="font-semibold">Default Password Information</span>
+                  </div>
+                  <p>A password is not required at creation.</p>
+                  <p>The user's default password will be their <strong>Username/ID</strong>.</p>
+                  <p>They will be prompted or can change it from their profile after logging in.</p>
               </div>
             )}
+
             <div className="flex items-center space-x-2">
-              <Switch id="is_active" checked={form.watch('is_active')} onCheckedChange={(checked) => form.setValue('is_active', checked)} />
+              <Switch 
+                id="is_active" 
+                checked={form.watch('is_active')} 
+                onCheckedChange={(checked) => form.setValue('is_active', checked)} 
+                disabled={editingUser?.role === 'Admin' && editingUser?.user_id === loggedInUser?.user_id && users.filter(u => u.role === 'Admin' && u.is_active).length <= 1 && form.watch('is_active')}
+                />
               <Label htmlFor="is_active">User is Active</Label>
             </div>
              {form.formState.errors.is_active && <p className="text-sm text-destructive mt-1">{form.formState.errors.is_active.message}</p>}
@@ -357,5 +389,3 @@ export default function UserManagementPage() {
     </div>
   );
 }
-
-    
