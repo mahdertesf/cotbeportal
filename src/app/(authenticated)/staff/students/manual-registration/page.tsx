@@ -13,8 +13,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { fetchAllUsers, fetchItems, handleManualStudentRegistration } from '@/lib/api';
 import type { UserProfile } from '@/stores/appStore';
-import { Loader2, UserPlus, CalendarDays, BookOpen, AlertTriangle } from 'lucide-react';
+import { Loader2, UserPlus, CalendarDays, BookOpen, AlertTriangle, Check, ChevronsUpDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from '@/lib/utils';
 
 interface Student extends UserProfile {
   // student_id is user_id for students
@@ -59,6 +62,7 @@ export default function ManualRegistrationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmationData, setConfirmationData] = useState<ManualRegistrationFormData | null>(null);
   
+  const [studentComboboxOpen, setStudentComboboxOpen] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<ManualRegistrationFormData>({
@@ -71,6 +75,7 @@ export default function ManualRegistrationPage() {
   });
 
   const selectedSemesterId = form.watch('semester_id');
+  const selectedStudentId = form.watch('student_id');
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -122,10 +127,7 @@ export default function ManualRegistrationPage() {
       const response = await handleManualStudentRegistration(confirmationData.student_id, confirmationData.scheduled_course_id);
       if (response.success) {
         toast({ title: "Registration Successful", description: response.message });
-        // Optionally reset form or update enrollment counts if shown on this page
         form.reset(); 
-        // Re-fetch scheduled courses to update enrollment counts if they were displayed here
-        // For simplicity, not re-fetching here, but would be needed if counts are shown.
       } else {
         toast({ title: "Registration Failed", description: response.error || "Could not register student.", variant: "destructive" });
       }
@@ -139,7 +141,7 @@ export default function ManualRegistrationPage() {
   
   const getStudentName = (studentId: string) => {
     const student = students.find(s => String(s.user_id) === String(studentId));
-    return student ? `${student.first_name} ${student.last_name}` : 'Unknown Student';
+    return student ? `${student.first_name} ${student.last_name} (ID: ${student.user_id})` : 'Unknown Student';
   };
 
   const getCourseDisplayInfo = (scheduledCourseId: string) => {
@@ -179,19 +181,51 @@ export default function ManualRegistrationPage() {
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div>
-              <Label htmlFor="student_id">Select Student</Label>
-              <Select onValueChange={(value) => form.setValue('student_id', value)} value={form.watch('student_id')}>
-                <SelectTrigger id="student_id">
-                  <SelectValue placeholder="Select a student" />
-                </SelectTrigger>
-                <SelectContent>
-                  {students.map(student => (
-                    <SelectItem key={student.user_id} value={String(student.user_id)}>
-                      {student.first_name} {student.last_name} ({student.username})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="student_id_combobox">Select Student</Label>
+              <Popover open={studentComboboxOpen} onOpenChange={setStudentComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={studentComboboxOpen}
+                    className="w-full justify-between"
+                    id="student_id_combobox"
+                  >
+                    {selectedStudentId
+                      ? students.find((student) => String(student.user_id) === selectedStudentId)?.username
+                      : "Select student..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search student by ID, name, or username..." />
+                    <CommandList>
+                      <CommandEmpty>No student found.</CommandEmpty>
+                      <CommandGroup>
+                        {students.map((student) => (
+                          <CommandItem
+                            key={student.user_id}
+                            value={`${student.username} ${student.first_name} ${student.last_name} ${student.user_id}`}
+                            onSelect={() => {
+                              form.setValue("student_id", String(student.user_id));
+                              setStudentComboboxOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedStudentId === String(student.user_id) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {student.first_name} {student.last_name} ({student.username} - ID: {student.user_id})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {form.formState.errors.student_id && <p className="text-sm text-destructive mt-1">{form.formState.errors.student_id.message}</p>}
             </div>
 
@@ -281,3 +315,6 @@ export default function ManualRegistrationPage() {
     </>
   );
 }
+
+
+    
