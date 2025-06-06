@@ -99,7 +99,8 @@ export async function handleChangePassword(userId: string | number, currentPassw
 export async function fetchAllUsers(): Promise<UserProfile[]> {
   console.log('Fetching all users');
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return [
+  // Ensure mockUsers includes necessary fields for Student, Teacher, Staff roles
+  const mockUsers: UserProfile[] = [
     { user_id: 'stud1', username: 'student.one', email: 's1@cotbe.edu', role: 'Student', first_name: 'Abebe', last_name: 'Bekele', is_active: true, date_joined: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", enrollment_date: "2022-09-01", date_of_birth: "2003-05-10", address: "Arat Kilo, Addis Ababa", phone_number: "0911111111" },
     { user_id: 'teacher-1', username: 'teacher.one', email: 't1@cotbe.edu', role: 'Teacher', first_name: 'Chaltu', last_name: 'Lemma', is_active: true, date_joined: new Date(Date.now() - 500 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-2', department_name: "Electrical Engineering", office_location: "Block C, Room 203", phone_number: "0922222222" },
     { user_id: 'staff1', username: 'staff.one', email: 'staff1@cotbe.edu', role: 'Staff Head', first_name: 'Kebede', last_name: 'Tadesse', is_active: true, date_joined: new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), job_title: "Registry Head", phone_number: "0933221100" },
@@ -107,6 +108,11 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
     { user_id: 'stud3', username: 'student.three', email: 's3@cotbe.edu', role: 'Student', first_name: 'Yonas', last_name: 'Ayele', is_active: false, date_joined: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-3', department_name: "Civil Engineering", enrollment_date: "2023-09-01", date_of_birth: "2002-11-05", address: "Piassa, Addis Ababa", phone_number: "0944444444" },
     { user_id: 'teacher-2', username: 'teacher.two', email: 't2@cotbe.edu', role: 'Teacher', first_name: 'Solomon', last_name: 'Gizaw', is_active: true, date_joined: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), last_login: new Date().toISOString(), department_id: 'dept-1', department_name: "Computer Science", office_location: "Block A, Room 105", phone_number: "0912987654" },
   ];
+  // Store these in mockDatabases if not already, for consistency.
+  if (!mockDatabases.users || mockDatabases.users.length === 0) {
+    mockDatabases.users = JSON.parse(JSON.stringify(mockUsers));
+  }
+  return JSON.parse(JSON.stringify(mockDatabases.users));
 }
 
 
@@ -114,7 +120,9 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
 export async function fetchStudentProfile(userId: string | number) {
   console.log('Fetching student profile for:', userId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // Return mock student profile data
+  const user = (await fetchAllUsers()).find(u => String(u.user_id) === String(userId) && u.role === 'Student');
+  if (user) return user;
+  // Fallback mock student profile data if not found in main list
   return {
     user_id: userId,
     username: 'teststudent',
@@ -137,7 +145,12 @@ export async function fetchStudentProfile(userId: string | number) {
 export async function updateStudentProfile(userId: string | number, data: Partial<UserProfile>) {
   console.log('Updating student profile for:', userId, 'with data:', data);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  return { success: true, data: { ...await fetchStudentProfile(userId), ...data } };
+  const userIndex = mockDatabases.users.findIndex(u => String(u.user_id) === String(userId) && u.role === 'Student');
+  if (userIndex !== -1) {
+      mockDatabases.users[userIndex] = { ...mockDatabases.users[userIndex], ...data };
+      return { success: true, data: mockDatabases.users[userIndex] };
+  }
+  return { success: false, error: "Student not found", data: null };
 }
 
 export async function fetchAvailableCourses(filters?: any) {
@@ -149,11 +162,11 @@ export async function fetchAvailableCourses(filters?: any) {
   const rooms = await fetchItems('rooms');
 
   return allScheduled.map((sc: any) => {
-    const courseDetail = catalog.find((c:any) => c.id === sc.course_id);
-    const teacherDetail = teachers.find((t:any) => t.user_id === sc.teacher_id);
-    const roomDetail = rooms.find((r:any) => r.id === sc.room_id);
+    const courseDetail = catalog.find((c:any) => String(c.id) === String(sc.course_id));
+    const teacherDetail = teachers.find((t:any) => String(t.user_id) === String(sc.teacher_id));
+    const roomDetail = rooms.find((r:any) => String(r.id) === String(sc.room_id));
     return {
-      id: sc.scheduled_course_id, // This is the scheduled_course_id
+      id: sc.scheduled_course_id, 
       course_code: courseDetail?.course_code || 'N/A',
       title: courseDetail?.title || 'N/A',
       credits: courseDetail?.credits || 0,
@@ -172,22 +185,37 @@ export async function fetchAvailableCourses(filters?: any) {
 export async function handleRegisterCourse(scheduledCourseId: string) {
   console.log('Registering for course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Add to mockRegistrations array if needed
   return { success: true, message: `Successfully registered for course ${scheduledCourseId}.` };
 }
 
 export async function handleDropCourse(registrationId: string) {
   console.log('Dropping course registration:', registrationId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Remove from mockRegistrations array if needed
   return { success: true, message: `Successfully dropped course ${registrationId}.` };
 }
 
 export async function fetchStudentRegisteredCourses(studentId: string | number) {
   console.log('Fetching registered courses for student:', studentId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-   return [
-    { registrationId: 'reg1', scheduledCourseId: 'sc1', course_code: 'CS101', title: 'Intro to Programming', status: 'Registered', final_grade: null },
-    { registrationId: 'reg2', scheduledCourseId: 'sc-fall24-ee305-a', course_code: 'EE305', title: 'Digital Logic Design', status: 'Registered', final_grade: null },
-  ];
+  // Filter mockDatabases.registrations by studentId
+  const studentRegs = mockDatabases.registrations.filter(reg => String(reg.student_id) === String(studentId));
+  const scheduledCourses = await fetchItems('scheduledCourses');
+  const catalog = await fetchItems('courses');
+
+  return studentRegs.map(reg => {
+    const sc = scheduledCourses.find(s => String(s.scheduled_course_id) === String(reg.scheduled_course_id));
+    const courseInfo = sc ? catalog.find(c => String(c.id) === String(sc.course_id)) : null;
+    return {
+      registrationId: reg.registration_id,
+      scheduledCourseId: reg.scheduled_course_id,
+      course_code: courseInfo?.course_code || 'N/A',
+      title: courseInfo?.title || 'N/A',
+      status: reg.status,
+      final_grade: reg.final_grade || null,
+    };
+  });
 }
 
 export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
@@ -203,11 +231,16 @@ export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
 export async function fetchStudentAssessments(scheduledCourseId: string, studentId: string | number) {
     console.log('Fetching assessments for student:', studentId, 'in course:', scheduledCourseId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return [
-        { assessment_id: 'asm1', name: 'Quiz 1', max_score: 20, score: 18, feedback: 'Good job!' },
-        { assessment_id: 'asm2', name: 'Midterm Exam', max_score: 100, score: 85, feedback: 'Well done on problem 3.' },
-        { assessment_id: 'asm3', name: 'Project Proposal', max_score: 10, score: null, feedback: null },
-    ];
+    // This should fetch from StudentAssessments table based on registration_id (linked to student and scheduled course)
+    const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
+    // For mock, let's return some of these course assessments, maybe with random scores
+    return courseAssessments.map((asm: any) => ({
+        assessment_id: asm.id,
+        name: asm.name,
+        max_score: asm.max_score,
+        score: Math.random() > 0.5 ? Math.floor(Math.random() * asm.max_score) : null,
+        feedback: Math.random() > 0.5 ? 'Mock feedback.' : null,
+    }));
 }
 
 export async function fetchAcademicHistory(studentId: string | number) {
@@ -298,6 +331,8 @@ export async function fetchAcademicHistory(studentId: string | number) {
 export async function fetchTeacherProfile(userId: string | number) {
     console.log('Fetching teacher profile for:', userId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+    const user = (await fetchAllUsers()).find(u => String(u.user_id) === String(userId) && u.role === 'Teacher');
+    if (user) return user;
     return {
         user_id: userId,
         username: 'testteacher',
@@ -318,13 +353,20 @@ export async function fetchTeacherProfile(userId: string | number) {
 export async function updateTeacherProfile(userId: string | number, data: Partial<UserProfile>) {
     console.log('Updating teacher profile for:', userId, 'with data:', data);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return { success: true, data: { ...await fetchTeacherProfile(userId), ...data } };
+    const userIndex = mockDatabases.users.findIndex(u => String(u.user_id) === String(userId) && u.role === 'Teacher');
+    if (userIndex !== -1) {
+        mockDatabases.users[userIndex] = { ...mockDatabases.users[userIndex], ...data };
+        return { success: true, data: mockDatabases.users[userIndex] };
+    }
+    return { success: false, error: "Teacher not found", data: null };
 }
 
 // --- Staff Head ---
 export async function fetchStaffProfile(userId: string | number) {
     console.log('Fetching staff profile for:', userId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+    const user = (await fetchAllUsers()).find(u => String(u.user_id) === String(userId) && u.role === 'Staff Head');
+    if (user) return user;
     return {
         user_id: userId,
         username: 'teststaff',
@@ -343,7 +385,12 @@ export async function fetchStaffProfile(userId: string | number) {
 export async function updateStaffProfile(userId: string | number, data: Partial<UserProfile>) {
     console.log('Updating staff profile for:', userId, 'with data:', data);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return { success: true, data: { ...await fetchStaffProfile(userId), ...data } };
+    const userIndex = mockDatabases.users.findIndex(u => String(u.user_id) === String(userId) && u.role === 'Staff Head');
+    if (userIndex !== -1) {
+        mockDatabases.users[userIndex] = { ...mockDatabases.users[userIndex], ...data };
+        return { success: true, data: mockDatabases.users[userIndex] };
+    }
+    return { success: false, error: "Staff not found", data: null };
 }
 
 
@@ -355,9 +402,9 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
     const courses = await fetchItems('courses');
     
     return allScheduled
-      .filter((sc: any) => sc.teacher_id === teacherId)
+      .filter((sc: any) => String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true))
       .map((sc: any) => {
-        const courseInfo = courses.find((c:any) => c.id === sc.course_id);
+        const courseInfo = courses.find((c:any) => String(c.id) === String(sc.course_id));
         return {
           scheduled_course_id: sc.scheduled_course_id,
           course_code: courseInfo?.course_code || 'N/A',
@@ -370,7 +417,27 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
 export async function fetchStudentRoster(scheduledCourseId: string): Promise<Array<{ student_id: string; first_name: string; last_name: string; email: string; }>> {
     console.log('Fetching student roster for course:', scheduledCourseId);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    // Mock data based on a known scheduledCourseId
+    
+    // Get all registrations for this scheduled course
+    const registrationsForCourse = mockDatabases.registrations.filter(
+      reg => String(reg.scheduled_course_id) === String(scheduledCourseId) && reg.status === 'Registered'
+    );
+    const studentIds = registrationsForCourse.map(reg => reg.student_id);
+
+    // Get student details for these student IDs
+    const allStudents = await fetchAllUsers(); // Assuming this returns all users
+    const roster = allStudents
+      .filter(user => user.role === 'Student' && studentIds.includes(String(user.user_id)))
+      .map(studentUser => ({
+        student_id: String(studentUser.user_id),
+        first_name: studentUser.first_name,
+        last_name: studentUser.last_name,
+        email: studentUser.email,
+      }));
+      
+    if (roster.length > 0) return roster;
+
+    // Fallback mock data if no registrations found for simplicity in current mock setup
     if (scheduledCourseId === 'sc-fall24-cs101-a' || scheduledCourseId === 'sc-fall24-ee305-a' || scheduledCourseId === 'sc-fall24-ee305-b') {
         return [
             { student_id: 'stud1', first_name: 'Abebe', last_name: 'Bekele', email: 'abebe@example.com' },
@@ -398,21 +465,23 @@ export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseI
 }>> {
   console.log('Fetching student registrations for grading, course:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-  // This should ideally fetch from registrations table and join with student names
-  // For mock, let's use the student roster and add registration details
-  const roster = await fetchStudentRoster(scheduledCourseId); // student_id, first_name, last_name, email
-  const existingFinalGrades = await fetchStudentFinalGradesForCourse(scheduledCourseId); // registration_id, student_id, final_grade, grade_points
+  
+  const registrationsForCourse = mockDatabases.registrations.filter(
+    reg => String(reg.scheduled_course_id) === String(scheduledCourseId)
+  );
 
-  return roster.map(student => {
-    const finalGradeInfo = existingFinalGrades.find(fg => fg.student_id === student.student_id);
+  const allStudents = await fetchAllUsers(); 
+
+  return registrationsForCourse.map(reg => {
+    const studentInfo = allStudents.find(u => String(u.user_id) === String(reg.student_id));
     return {
-      registration_id: finalGradeInfo?.registration_id || `reg-${scheduledCourseId}-${student.student_id}`, // Ensure a registration_id
-      student_id: student.student_id,
-      first_name: student.first_name,
-      last_name: student.last_name,
-      email: student.email,
-      current_final_grade: finalGradeInfo?.final_grade || null,
-      current_grade_points: finalGradeInfo?.grade_points || null,
+      registration_id: reg.registration_id,
+      student_id: reg.student_id,
+      first_name: studentInfo?.first_name || 'Unknown',
+      last_name: studentInfo?.last_name || 'Student',
+      email: studentInfo?.email || 'unknown@example.com',
+      current_final_grade: reg.final_grade || null,
+      current_grade_points: reg.grade_points || null,
     };
   });
 }
@@ -426,10 +495,11 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
 
   // Use dynamic course ID for assessment lookup
   const courseAssessments = await fetchItems(`assessments?courseId=${scheduledCourseId}`);
-  const students = await fetchStudentRoster(scheduledCourseId); // Get students for this course
+  // Get students registered for this course
+  const registrations = mockDatabases.registrations.filter(r => String(r.scheduled_course_id) === String(scheduledCourseId));
 
-  students.forEach(student => {
-      mockScores[student.student_id] = {};
+  registrations.forEach(reg => {
+      mockScores[reg.student_id] = {};
       courseAssessments.forEach((asm: any) => {
         const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
         let score: number | null = null;
@@ -441,7 +511,7 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
         } else {
             feedback = null; // No feedback if not graded
         }
-        mockScores[student.student_id][asm.id] = { score, feedback };
+        mockScores[reg.student_id][asm.id] = { score, feedback };
       });
     });
   return mockScores;
@@ -474,7 +544,7 @@ let mockDatabases: Record<string, any[]> = {
     { id: 'bldg-3', name: 'Architecture Pavilion', address: '3 Design Street, CoTBE Campus' },
     { id: 'bldg-4', name: 'Research Complex Alpha', address: '4 Discovery Road, CoTBE Campus' },
   ],
-  rooms: [ // Added building_name here for simplicity in mock, ideally this is a join
+  rooms: [ 
     { id: 'room-1', building_id: 'bldg-1', room_number: '101', capacity: 50, type: 'Lecture Hall', building_name: 'Main Engineering Building' },
     { id: 'room-2', building_id: 'bldg-1', room_number: '102 Lab', capacity: 30, type: 'Computer Lab', building_name: 'Main Engineering Building' },
     { id: 'room-3', building_id: 'bldg-2', room_number: 'A205', capacity: 75, type: 'Lecture Hall', building_name: 'Technology Hall' },
@@ -482,13 +552,15 @@ let mockDatabases: Record<string, any[]> = {
     { id: 'room-5', building_id: 'bldg-2', room_number: 'B101', capacity: 40, type: 'Classroom', building_name: 'Technology Hall' },
   ],
   scheduledCourses: [
-    { scheduled_course_id: 'sc-fall24-cs101-a', course_id: 'course-1', semester_id: 'sem-1', teacher_id: 'teacher-2', room_id: 'room-1', section_number: 'A', max_capacity: 50, current_enrollment: 45, days_of_week: 'MWF', start_time: '09:00', end_time: '09:50' },
-    { scheduled_course_id: 'sc-fall24-ee305-a', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-3', section_number: 'A', max_capacity: 30, current_enrollment: 28, days_of_week: 'TTH', start_time: '13:00', end_time: '14:15' },
-    { scheduled_course_id: 'sc-fall24-ee305-b', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-5', section_number: 'B', max_capacity: 25, current_enrollment: 20, days_of_week: 'TTH', start_time: '10:00', end_time: '11:15' },
+    { scheduled_course_id: 'sc-fall24-cs101-a', course_id: 'course-1', semester_id: 'sem-1', teacher_id: 'teacher-2', room_id: 'room-1', section_number: 'A', max_capacity: 50, current_enrollment: 0, days_of_week: 'MWF', start_time: '09:00', end_time: '09:50' },
+    { scheduled_course_id: 'sc-fall24-ee305-a', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-3', section_number: 'A', max_capacity: 30, current_enrollment: 0, days_of_week: 'TTH', start_time: '13:00', end_time: '14:15' },
+    { scheduled_course_id: 'sc-fall24-ee305-b', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-5', section_number: 'B', max_capacity: 25, current_enrollment: 0, days_of_week: 'TTH', start_time: '10:00', end_time: '11:15' },
+    { scheduled_course_id: 'sc-spring25-cs350-a', course_id: 'course-4', semester_id: 'sem-2', teacher_id: 'teacher-2', room_id: 'room-2', section_number: 'A', max_capacity: 30, current_enrollment: 0, days_of_week: 'MW', start_time: '14:00', end_time: '15:15' },
   ],
   users: [], // Populated by fetchAllUsers directly
   teachers: [], // Populated by fetchItems('teachers') from fetchAllUsers
-  assessments: {}, // Store assessments per courseId, e.g., assessments['sc-id'] = [...]
+  assessments: {}, 
+  registrations: [],
 };
 
 // Initialize assessments for scheduled courses
@@ -514,13 +586,10 @@ export async function fetchItems(entity: string, filters?: any) {
     const allUsers = await fetchAllUsers();
     return allUsers
         .filter(user => user.role === 'Teacher')
-        .map(user => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name }));
+        .map(user => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name, department_id: user.department_id }));
   }
   if (entity.startsWith('assessments?courseId=')) { // Assessments per course
     return JSON.parse(JSON.stringify(mockDatabases.assessments[entity] || []));
-  }
-   if (entity === 'scheduledCourses') { // For Staff Dashboard, now using the main mock
-    return JSON.parse(JSON.stringify(mockDatabases.scheduledCourses));
   }
   return [];
 }
@@ -536,8 +605,8 @@ export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string
   return studentRegistrations.map(reg => ({
     registration_id: reg.registration_id,
     student_id: reg.student_id,
-    final_grade: reg.current_final_grade, // This needs to come from Registrations table in a real DB
-    grade_points: reg.current_grade_points, // Likewise
+    final_grade: reg.current_final_grade, 
+    grade_points: reg.current_grade_points, 
   }));
 }
 
@@ -566,11 +635,10 @@ export async function createItem(entity: string, data: any) {
     mockDatabases[entity].push(newItem);
   } else if (entity.startsWith('assessments?courseId=')) {
       if (!mockDatabases.assessments[entity]) mockDatabases.assessments[entity] = [];
-      newItem.id = `asm-${entity.split('=')[1]}-${Date.now()}`; // ensure assessment id is unique in its course context
+      newItem.id = `asm-${entity.split('=')[1]}-${Date.now()}`; 
       mockDatabases.assessments[entity].push(newItem);
   } else {
     console.warn(`Mock database for entity "${entity}" not explicitly handled for creation, using generic push.`);
-    // Fallback for entities not explicitly in mockDatabases (less ideal)
     if (!mockDatabases[entity]) mockDatabases[entity] = [];
      mockDatabases[entity].push(newItem);
   }
@@ -606,13 +674,18 @@ export async function updateItem(entity: string, id: string | number, data: any)
     return { success: false, error: "Item not found", data: null };
   }
   
-  // Special handling for user updates if needed
   if (entity === 'users') {
      const updatedUser: Partial<UserProfile> = { [idKey]: id, ...data };
      return { success: true, data: updatedUser, error: null};
   }
-  if (entity === 'registrations') { // For final grade submission
+  if (entity === 'registrations') { 
     console.log(`Mock DB: Registration ${id} updated with final_grade: ${data.final_grade}, grade_points: ${data.grade_points}`);
+    const regIndex = mockDatabases.registrations.findIndex(r => String(r.registration_id) === String(id));
+    if(regIndex !== -1) {
+      mockDatabases.registrations[regIndex] = {...mockDatabases.registrations[regIndex], ...data};
+      return { success: true, data: mockDatabases.registrations[regIndex] };
+    }
+    return { success: false, error: "Registration not found for update." };
   }
   return { success: true, data: { [idKey]: id, ...data }, error: null};
 }
@@ -655,6 +728,49 @@ export async function fetchAuditLogs(filters?: any) {
     return defaultLogs.slice(0, limit);
 }
 
+export async function handleManualStudentRegistration(studentId: string, scheduledCourseId: string) {
+  console.log(`Manually registering student ${studentId} for scheduled course ${scheduledCourseId}`);
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
 
+  // Check if already registered
+  const existingRegistration = mockDatabases.registrations.find(
+    reg => String(reg.student_id) === String(studentId) && String(reg.scheduled_course_id) === String(scheduledCourseId)
+  );
+  if (existingRegistration) {
+    return { success: false, error: "Student is already registered for this course or waitlisted." };
+  }
+
+  const scheduledCourse = mockDatabases.scheduledCourses.find(sc => String(sc.scheduled_course_id) === String(scheduledCourseId));
+  if (!scheduledCourse) {
+    return { success: false, error: "Scheduled course not found." };
+  }
+
+  let message = `Student successfully registered for course.`;
+  if (scheduledCourse.current_enrollment >= scheduledCourse.max_capacity) {
+    message += ` (Capacity exceeded by manual override).`;
+    console.warn(`Manual registration for ${studentId} in ${scheduledCourseId} exceeded capacity.`);
+  }
+  
+  // Add to registrations
+  const newRegistration = {
+    registration_id: `reg-${Date.now()}`,
+    student_id: studentId,
+    scheduled_course_id: scheduledCourseId,
+    registration_date: new Date().toISOString(),
+    status: 'Registered', // Manual registration directly registers
+    final_grade: null,
+    grade_points: null,
+  };
+  mockDatabases.registrations.push(newRegistration);
+
+  // Update enrollment count
+  const scIndex = mockDatabases.scheduledCourses.findIndex(sc => String(sc.scheduled_course_id) === String(scheduledCourseId));
+  if (scIndex !== -1) {
+    mockDatabases.scheduledCourses[scIndex].current_enrollment += 1;
+  }
+  
+  return { success: true, message: message };
+}
     
+
 
