@@ -2,7 +2,7 @@
 // src/app/api/courseMaterials/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Embedded data and interface
+// Embedded data and interface to fix module resolution issue
 export interface CourseMaterial {
   id: string;
   title: string;
