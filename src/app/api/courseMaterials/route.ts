@@ -29,14 +29,14 @@ export async function GET(request: NextRequest) {
     if (!scheduledCourseId) {
       return NextResponse.json({ success: false, message: 'scheduledCourseId is required' }, { status: 400 });
     }
-    
+
     const filteredMaterials = courseMaterialsStore.filter(m => {
       return m && typeof m.scheduled_course_id !== 'undefined' && String(m.scheduled_course_id) === String(scheduledCourseId);
     });
-    
+
     return NextResponse.json({ success: true, data: filteredMaterials });
   } catch (error) {
-    console.error("Detailed error in GET /api/courseMaterials:", error); 
+    console.error("Detailed error in GET /api/courseMaterials:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json({ success: false, message: 'Server error fetching course materials.', error: errorMessage }, { status: 500 });
   }
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (material_type === 'Link' && !url) {
         return NextResponse.json({ success: false, message: 'URL is required for Link type material' }, { status: 400 });
     }
-    
+
     const newMaterial: CourseMaterial = {
       id: `cm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       title,
