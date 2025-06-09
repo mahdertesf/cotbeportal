@@ -8,21 +8,24 @@ export async function GET(request: NextRequest) {
     if (!scheduledCourseId) {
       return NextResponse.json({ success: false, message: 'scheduledCourseId is required' }, { status: 400 });
     }
-    // console.log('API GET courseMaterials for scheduledCourseId:', scheduledCourseId);
-    const filteredMaterials = courseMaterialsStore.filter(m => String(m.scheduled_course_id) === String(scheduledCourseId));
-    // console.log('API GET courseMaterials filtered:', filteredMaterials.length);
-    return NextResponse.json(filteredMaterials);
+    
+    const filteredMaterials = courseMaterialsStore.filter(m => {
+      // Defensive check: ensure m and m.scheduled_course_id exist before comparison
+      return m && typeof m.scheduled_course_id !== 'undefined' && String(m.scheduled_course_id) === String(scheduledCourseId);
+    });
+    
+    return NextResponse.json({ success: true, data: filteredMaterials });
   } catch (error) {
-    console.error("Error fetching course materials:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    return NextResponse.json({ success: false, message: 'Error fetching course materials', error: errorMessage }, { status: 500 });
+    console.error("Detailed error in GET /api/courseMaterials:", error); // More detailed server log
+    return NextResponse.json({ success: false, message: 'Server error fetching course materials.', error: errorMessage }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const materialData = await request.json();
-    const { title, description, material_type, url, file_path_mock, scheduled_course_id } = materialData;
+    const { title, description, material_type, url, file_path, scheduled_course_id } = materialData; // file_path instead of file_path_mock
 
     if (!title || !scheduled_course_id || !material_type) {
       return NextResponse.json({ success: false, message: 'Title, material_type, and scheduled_course_id are required' }, { status: 400 });
@@ -30,24 +33,25 @@ export async function POST(request: NextRequest) {
     if (material_type === 'Link' && !url) {
         return NextResponse.json({ success: false, message: 'URL is required for Link type material' }, { status: 400 });
     }
-
+    // For File type, file_path might be handled by a separate upload step in a real app
+    // Here, we'll assume it's provided or mock it if `file_path` is sent.
 
     const newMaterial: CourseMaterial = {
       id: `cm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       title,
       description: description || '',
       material_type,
-      file_path: material_type === 'File' ? (file_path_mock || `/uploads/mock/${title.replace(/\s+/g, '_')}.pdf`) : null,
+      file_path: material_type === 'File' ? (file_path || `/uploads/mock/${title.replace(/\s+/g, '_')}.pdf`) : null,
       url: material_type === 'Link' ? url : null,
-      scheduled_course_id: String(scheduled_course_id), // Ensure it's stored as string if IDs are mixed
+      scheduled_course_id: String(scheduled_course_id),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
     courseMaterialsStore.push(newMaterial);
     return NextResponse.json({ success: true, data: newMaterial }, { status: 201 });
   } catch (error) {
-    console.error("Error creating course material:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    return NextResponse.json({ success: false, message: 'Error creating course material', error: errorMessage }, { status: 500 });
+    console.error("Detailed error in POST /api/courseMaterials:", error);
+    return NextResponse.json({ success: false, message: 'Server error creating course material.', error: errorMessage }, { status: 500 });
   }
 }

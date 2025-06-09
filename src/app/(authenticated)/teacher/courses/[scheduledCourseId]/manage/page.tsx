@@ -14,32 +14,35 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from '@/hooks/use-toast';
 import { 
-  fetchItems, // Use generic fetchItems
+  fetchItems,
   createItem, 
   updateItem, 
   deleteItem,
-  fetchStudentRoster, 
+  fetchStudentRoster,
+  saveStudentAssessmentEntry, // Specific function for saving student assessment entries
 } from '@/lib/api'; 
 import { getGeminiAssessmentIdeas, getGeminiFeedbackSuggestions } from '@/ai/flows';
 import { Users, BookOpen, ClipboardEdit, Percent, CheckSquare, Loader2, PlusCircle, Edit, Trash2, Upload, LinkIcon, Brain, Send, Bot, User, FileText, AlertTriangle, Eye, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import Link from 'next/link';
 
 // Types
-interface Student { student_id: string; first_name: string; last_name: string; email: string; } // From roster
-interface CourseMaterial { id: string; title: string; description: string; material_type: 'File' | 'Link'; file_path?: string | null; url?: string | null; scheduled_course_id?: string;}
-interface Assessment { id: string; name: string; description: string; max_score: number; due_date: string; type: string; scheduledCourseId?: string; } // scheduledCourseId added for consistency
+interface Student { student_id: string; first_name: string; last_name: string; email: string; }
+interface CourseMaterial { id: string; title: string; description?: string | null; material_type: 'File' | 'Link'; file_path?: string | null; url?: string | null; scheduled_course_id?: string;}
+interface Assessment { id: string; name: string; description?: string | null; max_score: number; due_date: string; type: string; scheduledCourseId?: string; }
 interface StudentAssessmentEntry { student_assessment_id?: string; student_id: string; assessment_id: string; registration_id: string; score: number | null; feedback: string | null; }
 interface ScheduledCourseDetails { 
     scheduled_course_id: string; 
-    course_code: string; 
-    title: string; 
-    section: string; // section_number from API
-    // Add other enriched fields if needed, e.g., teacher_name, semester_name
+    course_code?: string; 
+    title?: string; 
+    section?: string;
     teacher_name?: string;
     semester_name?: string;
     room_display_name?: string;
     schedule?: string;
 }
+interface StudentRegistration { registration_id: string, student_id: string, first_name: string, last_name: string, email: string, final_grade: string | null, grade_points: number | null }
+
 
 interface StudentFinalGradeEntry {
   registration_id: string;
@@ -64,17 +67,26 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
   const [file, setFile] = useState<File | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const loadMaterials = async () => {
-      setIsLoading(true);
-      try {
-        const data = await fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`); 
-        setMaterials(data as CourseMaterial[]);
-      } catch (e) { toast({ title: "Error loading materials", variant: "destructive"}); }
-      setIsLoading(false);
+  const loadMaterials = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`); 
+      if (response.success && Array.isArray(response.data)) {
+        setMaterials(response.data as CourseMaterial[]);
+      } else {
+        setMaterials([]);
+        toast({ title: "Error loading materials", description: response.error || response.message || "Could not fetch materials.", variant: "destructive"});
+      }
+    } catch (e: any) { 
+      toast({ title: "Error loading materials", description: e.message || "An unexpected error occurred.", variant: "destructive"}); 
+      setMaterials([]);
     }
-    loadMaterials();
+    setIsLoading(false);
   }, [scheduledCourseId, toast]);
+
+  useEffect(() => {
+    loadMaterials();
+  }, [loadMaterials]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) setFile(e.target.files[0]);
@@ -82,22 +94,46 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
 
   const handleSubmitMaterial = async () => {
     try {
-      // Mock file upload: In a real app, upload `file` to storage and get URL for `file_path`
-      const materialPayload = {
+      const materialPayload: Partial<CourseMaterial> = {
         ...newMaterial,
         scheduled_course_id: scheduledCourseId,
-        file_path: file ? `/uploads/mock/${file.name}` : newMaterial.file_path, // Mock path
       };
-      const created = await createItem('courseMaterials', materialPayload); 
-      setMaterials(prev => [...prev, created.data as CourseMaterial]);
-      setShowForm(false);
-      setNewMaterial({ title: '', description: '', material_type: 'File' });
-      setFile(null);
-      toast({title: "Material added"});
-    } catch(e) {
-      toast({title: "Error adding material", variant: "destructive"});
+      if (newMaterial.material_type === 'File' && file) {
+        materialPayload.file_path = `/uploads/mock/${file.name}`; // Mock path for demo
+      } else if (newMaterial.material_type === 'Link' && newMaterial.url) {
+         materialPayload.url = newMaterial.url;
+      }
+
+
+      const createdResponse = await createItem('courseMaterials', materialPayload); 
+      if (createdResponse.success && createdResponse.data) {
+        setMaterials(prev => [...prev, createdResponse.data as CourseMaterial]);
+        setShowForm(false);
+        setNewMaterial({ title: '', description: '', material_type: 'File' });
+        setFile(null);
+        toast({title: "Material added"});
+      } else {
+        toast({title: "Error adding material", description: createdResponse.error || "Could not save material.", variant: "destructive"});
+      }
+    } catch(e: any) {
+      toast({title: "Error adding material", description: e.message || "An unexpected error occurred.", variant: "destructive"});
     }
   };
+
+  const handleDeleteMaterial = async (materialId: string) => {
+    try {
+        const response = await deleteItem('courseMaterials', materialId);
+        if (response.success) {
+            setMaterials(prev => prev.filter(m => m.id !== materialId));
+            toast({ title: "Material Deleted" });
+        } else {
+            toast({ title: "Error", description: response.error || "Failed to delete material.", variant: "destructive" });
+        }
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -109,7 +145,7 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
       {showForm && (
         <Card className="p-4 space-y-3">
           <Input placeholder="Title" value={newMaterial.title} onChange={e => setNewMaterial({...newMaterial, title: e.target.value})} />
-          <Textarea placeholder="Description" value={newMaterial.description} onChange={e => setNewMaterial({...newMaterial, description: e.target.value})} />
+          <Textarea placeholder="Description" value={newMaterial.description || ''} onChange={e => setNewMaterial({...newMaterial, description: e.target.value})} />
           <select value={newMaterial.material_type} onChange={e => setNewMaterial({...newMaterial, material_type: e.target.value as 'File' | 'Link'})} className="border p-2 rounded w-full bg-background text-foreground">
             <option value="File">File</option>
             <option value="Link">Link</option>
@@ -126,9 +162,8 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
                 <p className="text-xs text-muted-foreground">{m.description}</p>
             </div>
             <div className="space-x-1">
-              {/* Edit/Delete buttons can be implemented similarly if needed */}
-              <Button variant="ghost" size="sm"><Edit className="h-4 w-4"/></Button>
-              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+              {/* Edit functionality can be added here, similar to Add */}
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteMaterial(m.id)}><Trash2 className="h-4 w-4"/></Button>
             </div>
           </li>
         ))}
@@ -144,7 +179,7 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [currentAssessment, setCurrentAssessment] = useState<Partial<Assessment>>({});
+  const [currentAssessment, setCurrentAssessment] = useState<Partial<Assessment>>({name: '', description: '', max_score: 100, due_date: '', type: ''});
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiIdeas, setAiIdeas] = useState('');
   const [aiTopic, setAiTopic] = useState('');
@@ -153,9 +188,17 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
   const loadData = useCallback(async () => {
       setIsLoading(true);
       try {
-        const data = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`);
-        setAssessments(data as Assessment[]);
-      } catch(e) { toast({title: "Error loading assessments", variant: "destructive"});}
+        const response = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`);
+        if (response.success && Array.isArray(response.data)) {
+            setAssessments(response.data as Assessment[]);
+        } else {
+            setAssessments([]);
+            toast({title: "Error loading assessments", description: response.error || response.message || "Could not fetch assessments.", variant: "destructive"});
+        }
+      } catch(e: any) { 
+          toast({title: "Error loading assessments", description: e.message || "An unexpected error occurred.", variant: "destructive"});
+          setAssessments([]);
+      }
       setIsLoading(false);
     }, [scheduledCourseId, toast]);
 
@@ -165,17 +208,22 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
   
   const handleSaveAssessment = async () => {
     try {
-      const payload = {...currentAssessment, scheduledCourseId: scheduledCourseId};
+      const payload: Partial<Assessment> = {...currentAssessment, scheduledCourseId: scheduledCourseId}; // Ensure scheduledCourseId is sent as scheduledCourseId
+      let response;
       if(currentAssessment.id) {
-        await updateItem('assessments', currentAssessment.id, payload);
+        response = await updateItem('assessments', currentAssessment.id, payload);
       } else {
-        await createItem('assessments', payload); 
+        response = await createItem('assessments', payload); 
       }
-      loadData(); // Reload assessments
-      setShowForm(false);
-      setCurrentAssessment({});
-      toast({title: "Assessment saved"});
-    } catch(e) { toast({title: "Error saving assessment", variant: "destructive"});}
+      if (response.success) {
+        loadData(); 
+        setShowForm(false);
+        setCurrentAssessment({name: '', description: '', max_score: 100, due_date: '', type: ''});
+        toast({title: "Assessment saved"});
+      } else {
+        toast({title: "Error saving assessment", description: response.error || "Could not save assessment.", variant: "destructive"});
+      }
+    } catch(e:any) { toast({title: "Error saving assessment", description: e.message || "An unexpected error occurred.", variant: "destructive"});}
   };
   
   const handleGetAiAssessmentIdeas = async () => {
@@ -184,9 +232,24 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
     try {
       const ideas = await getGeminiAssessmentIdeas({ inputText: aiTopic, courseContext: `Course ID: ${scheduledCourseId}` });
       setAiIdeas(ideas.assessmentIdeas);
-    } catch (e) { toast({title: "AI Error", description: "Could not get AI ideas.", variant: "destructive"}); }
+    } catch (e: any) { toast({title: "AI Error", description: e.message || "Could not get AI ideas.", variant: "destructive"}); }
     setIsAiLoading(false);
   };
+
+  const handleDeleteAssessment = async (assessmentId: string) => {
+    try {
+        const response = await deleteItem('assessments', assessmentId);
+        if (response.success) {
+            loadData();
+            toast({ title: "Assessment Deleted" });
+        } else {
+            toast({ title: "Error", description: response.error || "Failed to delete assessment.", variant: "destructive" });
+        }
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
+  };
+
 
   if (isLoading) return <Skeleton className="h-60 w-full" />;
 
@@ -194,7 +257,7 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
     <Card>
         <CardHeader><CardTitle>Assessments</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-      <Button onClick={() => { setShowForm(true); setCurrentAssessment({}); setAiIdeas(''); setAiTopic(''); }}><PlusCircle className="mr-2 h-4 w-4"/>Create Assessment</Button>
+      <Button onClick={() => { setShowForm(true); setCurrentAssessment({name: '', description: '', max_score: 100, due_date: '', type: ''}); setAiIdeas(''); setAiTopic(''); }}><PlusCircle className="mr-2 h-4 w-4"/>Create Assessment</Button>
       {showForm && (
         <Card className="p-4 space-y-3">
           <Input placeholder="Name" value={currentAssessment.name || ''} onChange={e => setCurrentAssessment({...currentAssessment, name: e.target.value})} />
@@ -221,7 +284,7 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
             <span>{a.name} (Max: {a.max_score}) - Due: {new Date(a.due_date).toLocaleString()}</span>
             <div className="space-x-1">
               <Button variant="ghost" size="sm" onClick={() => { setCurrentAssessment(a); setShowForm(true); }}><Edit className="h-4 w-4"/></Button>
-              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async () => { await deleteItem('assessments', a.id); loadData(); toast({title: "Assessment deleted"});}}><Trash2 className="h-4 w-4"/></Button>
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteAssessment(a.id)}><Trash2 className="h-4 w-4"/></Button>
             </div>
           </li>
         ))}
@@ -235,7 +298,7 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
 // Gradebook Component
 const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string, students: Student[] }) => {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [grades, setGrades] = useState<Record<string, StudentAssessmentEntry>>({}); // Key: "studentId_assessmentId"
+  const [grades, setGrades] = useState<Record<string, StudentAssessmentEntry>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [currentSubmissionText, setCurrentSubmissionText] = useState(''); 
   const [aiFeedback, setAiFeedback] = useState('');
@@ -246,20 +309,36 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
   const loadGradebookData = useCallback(async () => {
     setIsLoading(true);
     try {
-        const assessmentData = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as Assessment[];
-        setAssessments(assessmentData);
+        const asmResponse = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`);
+        if (asmResponse.success && Array.isArray(asmResponse.data)) {
+            setAssessments(asmResponse.data as Assessment[]);
+        } else {
+            setAssessments([]);
+            toast({title: "Error", description: asmResponse.error || "Could not load assessments for gradebook.", variant: "destructive"});
+        }
 
-        const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as StudentAssessmentEntry[];
+        const entriesResponse = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`);
         const gradesMap: Record<string, StudentAssessmentEntry> = {};
-        studentEntries.forEach(entry => {
-            gradesMap[`${entry.student_id}_${entry.assessment_id}`] = entry;
-        });
+        if (entriesResponse.success && Array.isArray(entriesResponse.data)) {
+            (entriesResponse.data as StudentAssessmentEntry[]).forEach(entry => {
+                gradesMap[`${entry.student_id}_${entry.assessment_id}`] = entry;
+            });
+        } // No toast here, empty gradesMap is fine if no entries exist yet
         setGrades(gradesMap);
         
-        const studentRegs = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`) as Array<{registration_id: string, student_id: string}>;
-        setRegistrations(studentRegs.map(r => ({ registration_id: r.registration_id, student_id: r.student_id })));
+        const regsResponse = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`);
+        if (regsResponse && Array.isArray(regsResponse)) { // Assuming fetchItems for registrations returns array directly
+            setRegistrations(regsResponse.map(r => ({ registration_id: r.registration_id, student_id: r.student_id })));
+        } else {
+            setRegistrations([]);
+            toast({title: "Error", description: "Could not load student registrations for grading.", variant: "destructive"});
+        }
 
-    } catch (e) { toast({title: "Error loading gradebook data", variant: "destructive"});}
+    } catch (e: any) { 
+        toast({title: "Error loading gradebook data", description: e.message, variant: "destructive"});
+        setAssessments([]);
+        setRegistrations([]);
+    }
     setIsLoading(false);
   }, [scheduledCourseId, toast]);
 
@@ -267,7 +346,7 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
     loadGradebookData();
   }, [loadGradebookData]);
 
-  const handleGradeChange = (studentId: string, assessmentId: string, field: 'score' | 'feedback', value: string | number) => {
+  const handleGradeChange = (studentId: string, assessmentId: string, field: 'score' | 'feedback', value: string | number | null) => {
     const key = `${studentId}_${assessmentId}`;
     const reg = registrations.find(r => r.student_id === studentId);
     if (!reg) {
@@ -284,37 +363,42 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
     }));
   };
   
-  const handleGetAiFeedback = async (assessmentCriteria: string) => {
+  const handleGetAiFeedback = async (assessmentCriteria: string | null | undefined) => {
     if(!currentSubmissionText) { toast({title: "Submission text needed for AI feedback", variant: "destructive"}); return; }
     setIsAiFeedbackLoading(true);
     try {
-      const feedbackSuggestions = await getGeminiFeedbackSuggestions({ submissionText: currentSubmissionText, assessmentCriteria });
+      const feedbackSuggestions = await getGeminiFeedbackSuggestions({ submissionText: currentSubmissionText, assessmentCriteria: assessmentCriteria || '' });
       setAiFeedback(feedbackSuggestions.feedbackSuggestions);
-    } catch(e) { toast({title: "AI Feedback Error", variant: "destructive"});}
+    } catch(e: any) { toast({title: "AI Feedback Error", description: e.message, variant: "destructive"});}
     setIsAiFeedbackLoading(false);
   };
   
   const handleSaveGrades = async () => {
-    setIsLoading(true); // Use general loading state for saving all
+    setIsLoading(true); 
     let successCount = 0;
     for (const key in grades) {
         const entry = grades[key];
-        if (entry.registration_id) { // Ensure we have a registration_id to link StudentAssessment
+        if (entry.registration_id) {
            try {
-                await createItem('studentAssessments', entry); // This will upsert via POST
-                successCount++;
-           } catch (error) {
-               toast({title: "Error Saving Grade", description: `Could not save grade for student ID ${entry.student_id}, assessment ID ${entry.assessment_id}`, variant: "destructive"})
+                // The saveStudentAssessmentEntry function now directly calls POST /api/studentAssessments
+                const response = await saveStudentAssessmentEntry(entry); 
+                if (response.success) {
+                    successCount++;
+                } else {
+                    toast({title: "Error Saving Grade", description: response.error || `Could not save grade for student ID ${entry.student_id}, assessment ID ${entry.assessment_id}`, variant: "destructive"})
+                }
+           } catch (error: any) {
+               toast({title: "Error Saving Grade", description: error.message || `Could not save grade for student ID ${entry.student_id}, assessment ID ${entry.assessment_id}`, variant: "destructive"})
            }
         }
     }
     if (successCount > 0) toast({ title: "Grades Saved", description: `${successCount} grade entries processed.`});
     setIsLoading(false);
-    loadGradebookData(); // Refresh data
+    loadGradebookData(); 
   };
 
 
-  if(isLoading && assessments.length === 0) return <Skeleton className="h-80 w-full" />;
+  if(isLoading && assessments.length === 0 && students.length === 0) return <Skeleton className="h-80 w-full" />;
 
   return (
     <Card>
@@ -341,7 +425,7 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
                     placeholder="Score" 
                     className="mb-1 w-20 mx-auto"
                     value={currentGradeEntry?.score ?? ''}
-                    onChange={e => handleGradeChange(s.student_id, a.id, 'score', e.target.value)}
+                    onChange={e => handleGradeChange(s.student_id, a.id, 'score', e.target.value === '' ? null : e.target.value)}
                     max={a.max_score}
                   />
                   <Dialog>
@@ -397,7 +481,7 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
 // Final Grades Submission Component
 const getGradeDetailsFromScore = (scoreOutOf100: number | null): { letter_grade: string | null, grade_points: number | null } => {
   if (scoreOutOf100 === null || isNaN(scoreOutOf100) || scoreOutOf100 < 0 || scoreOutOf100 > 100) return { letter_grade: null, grade_points: null };
-  const score = Math.round(scoreOutOf100); // Ensure integer for comparison
+  const score = Math.round(scoreOutOf100);
   if (score >= 90) return { letter_grade: 'A', grade_points: 4.0 };
   if (score >= 85) return { letter_grade: 'A-', grade_points: 3.7 };
   if (score >= 80) return { letter_grade: 'B+', grade_points: 3.3 };
@@ -419,11 +503,15 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
   const calculateAndSetGradeEntries = useCallback(async () => {
     setIsLoading(true);
     try {
-      const courseAssessments = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as Assessment[];
-      const studentRegistrations = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`) as Array<{ registration_id: string, student_id: string, first_name: string, last_name: string, final_grade: string | null, grade_points: number | null}>; // API already enriches this
-      const allStudentRawScoresData = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as StudentAssessmentEntry[];
+      const asmResponse = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`);
+      const courseAssessments: Assessment[] = (asmResponse.success && Array.isArray(asmResponse.data)) ? asmResponse.data : [];
+
+      const regResponse = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`);
+      const studentRegistrations: StudentRegistration[] = Array.isArray(regResponse) ? regResponse : [];
       
-      // Transform allStudentRawScoresData for easier lookup
+      const scoresResponse = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`);
+      const allStudentRawScoresData: StudentAssessmentEntry[] = (scoresResponse.success && Array.isArray(scoresResponse.data)) ? scoresResponse.data : [];
+      
       const allStudentRawScores: Record<string, Record<string, { score: number | null }>> = {};
       allStudentRawScoresData.forEach(entry => {
           if (!allStudentRawScores[entry.student_id]) {
@@ -450,8 +538,10 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
 
           if (!isFullyGraded) {
             status = 'PendingGrading';
-          } else if (courseTotalMaxScore === 0) {
+          } else if (courseTotalMaxScore === 0 && courseAssessments.length > 0) { // Only error if there are assessments but total score is 0
             status = 'Error'; 
+          } else if (courseTotalMaxScore === 0 && courseAssessments.length === 0) { // No assessments, no error
+             status = 'NoAssessments';
           } else {
             const studentTotalRawScore = courseAssessments.reduce((sum, asm) => {
               const scoreEntry = studentScoresForCourse[asm.id];
@@ -484,9 +574,9 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
       });
       setGradeEntries(newGradeEntries);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error calculating grade entries:", error);
-      toast({ title: "Error", description: "Failed to calculate final grades.", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to calculate final grades.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -504,11 +594,13 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
     for (const entry of gradeEntries) {
       if (entry.status === 'Calculated' && entry.has_changed) {
         try {
-          await updateItem('registrations', entry.registration_id, {
+          const response = await updateItem('registrations', entry.registration_id, {
             final_grade: entry.calculated_letter_grade,
             grade_points: entry.calculated_grade_points,
           });
-          successCount++;
+          if(response.success) successCount++;
+          else errorCount++;
+
         } catch (error) {
           errorCount++;
           toast({ title: `Error Saving for ${entry.first_name}`, description: "Could not save the grade.", variant: "destructive" });
@@ -560,6 +652,7 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
               <TableCell>{entry.original_letter_grade || 'N/A'}</TableCell>
             </TableRow>
           ))}
+           {gradeEntries.length === 0 && <TableRow><TableCell colSpan={6} className="text-center">No students found for final grade calculation.</TableCell></TableRow>}
         </TableBody>
       </Table>
       <Button onClick={handleSaveAllFinalGrades} disabled={isSaving || gradeEntries.every(e => e.status !== 'Calculated' || !e.has_changed)}>
@@ -575,39 +668,39 @@ export default function TeacherCourseManagementPage() {
   const params = useParams();
   const scheduledCourseId = params.scheduledCourseId as string;
   const { toast } = useToast();
-  const user = useAppStore(state => state.user); // Get current user
+  const user = useAppStore(state => state.user); 
   const [courseDetails, setCourseDetails] = useState<ScheduledCourseDetails | null>(null);
   const [students, setStudents] = useState<Student[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (scheduledCourseId && user?.user_id) { // Ensure user is available for permission checks if any
+    if (scheduledCourseId && user?.user_id) { 
       const loadData = async () => {
         setIsLoading(true);
         try {
-          const fetchedCourseDetails = await fetchItems('scheduledCourses', scheduledCourseId) as ScheduledCourseDetails;
-          if (fetchedCourseDetails) {
-             // Ensure the fetched course teacher_id matches the logged-in user's ID (if applicable for security)
-            // For now, directly setting details
-            setCourseDetails({
-                scheduled_course_id: fetchedCourseDetails.scheduled_course_id,
-                course_code: fetchedCourseDetails.course_code || 'N/A',
-                title: fetchedCourseDetails.title || 'N/A',
-                section: (fetchedCourseDetails as any).section_number || 'N/A', // Assuming section_number is present
-                teacher_name: fetchedCourseDetails.teacher_name,
-                semester_name: fetchedCourseDetails.semester_name,
-                room_display_name: fetchedCourseDetails.room_display_name
+          const fetchedCourseDetailsResponse = await fetchItems('scheduledCourses', scheduledCourseId);
+          if (fetchedCourseDetailsResponse && typeof fetchedCourseDetailsResponse === 'object' && !Array.isArray(fetchedCourseDetailsResponse) && ('scheduled_course_id' in fetchedCourseDetailsResponse) ) {
+            const details = fetchedCourseDetailsResponse as ScheduledCourseDetails;
+             setCourseDetails({
+                scheduled_course_id: details.scheduled_course_id,
+                course_code: details.course_code || 'N/A',
+                title: details.title || 'N/A',
+                section: details.section || 'N/A',
+                teacher_name: details.teacher_name,
+                semester_name: details.semester_name,
+                room_display_name: details.room_display_name,
+                schedule: details.schedule
             });
           } else {
-            toast({title: "Error", description: "Course not found.", variant: "destructive"});
-            setCourseDetails(null); // Explicitly set to null if not found
+            toast({title: "Error", description: "Course details not found or in unexpected format.", variant: "destructive"});
+            setCourseDetails(null);
           }
           
           const roster = await fetchStudentRoster(scheduledCourseId);
           setStudents(roster);
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error loading course management data:", error)
-          toast({ title: "Error", description: "Failed to load course management data.", variant: "destructive" });
+          toast({ title: "Error", description: error.message || "Failed to load course management data.", variant: "destructive" });
           setCourseDetails(null);
         } finally {
           setIsLoading(false);
@@ -659,6 +752,7 @@ export default function TeacherCourseManagementPage() {
           <CardTitle className="font-headline text-2xl">Manage Course: {courseDetails.course_code} - {courseDetails.title} (Section {courseDetails.section})</CardTitle>
           <CardDescription>
             Teacher: {courseDetails.teacher_name || 'N/A'} | Semester: {courseDetails.semester_name || 'N/A'} | Room: {courseDetails.room_display_name || 'N/A'}
+             | Schedule: {courseDetails.schedule || 'N/A'}
             <br/>
             Oversee students, materials, assessments, and grades for this course.
           </CardDescription>
@@ -680,7 +774,7 @@ export default function TeacherCourseManagementPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {students.length > 0 ? students.map(s => <TableRow key={s.student_id}><TableCell>{s.first_name} {s.last_name}</TableCell><TableCell>{s.email}</TableCell><TableCell><Button size="sm" variant="outline"><Eye className="mr-1 h-3 w-3"/>View Progress</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">No students enrolled.</TableCell></TableRow>}
+                  {students.length > 0 ? students.map(s => <TableRow key={s.student_id}><TableCell>{s.first_name} {s.last_name}</TableCell><TableCell>{s.email}</TableCell><TableCell><Button size="sm" variant="outline" disabled><Eye className="mr-1 h-3 w-3"/>View Progress (NYI)</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">No students enrolled.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
