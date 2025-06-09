@@ -73,9 +73,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: 'Server error creating course material.', error: errorMessage }, { status: 500 });
   }
 }
-
-// Individual material GET, PUT, DELETE by ID are handled by /api/courseMaterials/[id]/route.ts
-// So these functions are not needed here if that file structure is used.
-// If route.ts is meant to handle /api/courseMaterials AND /api/courseMaterials/[id] (less common for Next.js App Router),
-// then these would be needed here, and the file would be named [...parts]/route.ts or similar.
-// Assuming /api/courseMaterials/[id]/route.ts handles individual items.
