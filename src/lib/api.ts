@@ -7,6 +7,7 @@ export async function handleLogin(username: string, password_hash: string, role:
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password: password_hash, role }),
+    cache: 'no-store',
   });
   return response.json();
 }
@@ -16,6 +17,7 @@ export async function handleForgotPassword(email: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
+    cache: 'no-store',
   });
   return response.json();
 }
@@ -25,6 +27,7 @@ export async function handleResetPassword(token: string, newPassword_hash: strin
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, newPassword: newPassword_hash }),
+    cache: 'no-store',
   });
   return response.json();
 }
@@ -34,6 +37,7 @@ export async function handleChangePassword(userId: string | number, currentPassw
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, currentPassword: currentPassword_hash, newPassword: newPassword_hash }),
+    cache: 'no-store',
   });
   return response.json();
 }
@@ -136,7 +140,7 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
          apiUrl = `${apiUrl}?${queryParamsString}`;
     }
 
-    const response = await fetch(apiUrl, { cache: 'no-store' }); // Added cache: 'no-store'
+    const response = await fetch(apiUrl, { cache: 'no-store' });
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: `API request failed for ${entityOrQuery} with status ${response.status}` }));
         const errorMessage = errorData.message || errorData.error || `Failed to fetch ${entityOrQuery}. Status: ${response.status}, Details: ${JSON.stringify(errorData)}`;
@@ -150,8 +154,8 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
   if (mockDatabases[entityOrQuery]) {
     return JSON.parse(JSON.stringify(mockDatabases[entityOrQuery]));
   }
-   if (entityOrQuery === 'teachers') { // This specific case might still be needed if /api/users doesn't support role filtering well enough
-    const response = await fetch('/api/users?role=Teacher', { cache: 'no-store' }); // Added cache: 'no-store'
+   if (entityOrQuery === 'teachers') { 
+    const response = await fetch('/api/users?role=Teacher', { cache: 'no-store' }); 
     if (!response.ok) throw new Error('Failed to fetch teachers');
     const allUsers = await response.json();
     return allUsers.filter((user: UserProfile) => user.role === 'Teacher')
@@ -184,6 +188,7 @@ export async function createItem(entity: string, data: any): Promise<{ success: 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      cache: 'no-store',
     });
     return response.json();
   }
@@ -245,6 +250,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
       method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      cache: 'no-store',
     });
     return response.json();
   }
@@ -284,7 +290,7 @@ export async function deleteItem(entity: string, id: string | number): Promise<{
   };
 
   if (entityToApiMap[entity]) {
-    const response = await fetch(entityToApiMap[entity], { method: 'DELETE' });
+    const response = await fetch(entityToApiMap[entity], { method: 'DELETE', cache: 'no-store' });
     return response.json();
   }
 
@@ -313,7 +319,6 @@ export async function fetchAvailableCourses(filters?: any) {
     queryString = params.toString();
   }
 
-  // This call now uses fetchItems, which itself uses cache: 'no-store'
   const scheduledCoursesFromApi = await fetchItems(`scheduledCourses${queryString ? `?${queryString}` : ''}`);
 
   return scheduledCoursesFromApi.map((sc: any) => ({
@@ -334,18 +339,15 @@ export async function fetchAvailableCourses(filters?: any) {
 
 
 export async function handleRegisterCourse(scheduledCourseId: string, studentId: string | number) { 
-  // console.log(`Registering student ${studentId} for course:`, scheduledCourseId);
   return createItem('registrations', { student_id: String(studentId), scheduled_course_id: String(scheduledCourseId) });
 }
 
 export async function handleDropCourse(registrationId: string) {
-  // console.log('Dropping course registration:', registrationId);
   return updateItem('registrations', registrationId, { status: 'Dropped' });
 }
 
 export async function fetchStudentRegisteredCourses(studentId: string | number) {
-  // console.log('Fetching registered courses for student:', studentId);
-  const registrations = await fetchItems(`registrations?studentId=${studentId}`); // This call now uses fetchItems
+  const registrations = await fetchItems(`registrations?studentId=${studentId}`);
   return registrations.map((reg: any) => ({
       registrationId: reg.registration_id,
       scheduledCourseId: reg.scheduled_course_id,
@@ -358,27 +360,24 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
 
 
 export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
-  // console.log('Fetching course materials for:', scheduledCourseId);
-  return fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`); // This call now uses fetchItems
+  return fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`);
 }
 
 export async function fetchStudentAssessments(studentId: string | number, scheduledCourseId: string) {
-    // console.log('Fetching assessments and scores for student:', studentId, 'in course:', scheduledCourseId);
+    const courseAssessments = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as any[];
     
-    const courseAssessments = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as any[]; // Uses fetchItems
-    
-    const studentRegistrations = await fetchItems(`registrations?studentId=${studentId}`) as any[]; // Uses fetchItems
+    const studentRegistrations = await fetchItems(`registrations?studentId=${studentId}`) as any[];
     const currentRegistration = studentRegistrations.find(reg => String(reg.scheduled_course_id) === String(scheduledCourseId));
 
     let studentScores: any[] = [];
     if (currentRegistration) {
-        studentScores = await fetchItems(`studentAssessments?registrationId=${currentRegistration.registration_id}`) as any[]; // Uses fetchItems
+        studentScores = await fetchItems(`studentAssessments?registrationId=${currentRegistration.registration_id}`) as any[];
     }
     
     return courseAssessments.map(asm => {
         const scoreEntry = studentScores.find(sc => String(sc.assessment_id) === String(asm.id) && String(sc.registration_id) === String(currentRegistration?.registration_id));
         return {
-            id: asm.id, // assessment_id
+            id: asm.id,
             name: asm.name,
             description: asm.description,
             max_score: asm.max_score,
@@ -398,8 +397,7 @@ export async function fetchStudentAssessments(studentId: string | number, schedu
 }
 
 export async function fetchAcademicHistory(studentId: string | number) {
-  // console.log('Fetching academic history for student:', studentId);
-  await new Promise(resolve => setTimeout(resolve, 100)); // Keep mock delay
+  await new Promise(resolve => setTimeout(resolve, 100)); 
     const coursesSem1Year1 = [ { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 }, { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 }, ];
   const totalCreditsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.credits, 0);
   const totalGradePointsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.grade_points, 0);
@@ -426,18 +424,30 @@ export async function fetchAcademicHistory(studentId: string | number) {
 }
 
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
-    console.log('[API LIB] Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
+    console.log('[API LIB] Attempting to fetch courses for teacher ID:', teacherId);
     let apiUrl = `/api/scheduledCourses`; 
     
-    const allScheduledCourses = await fetchItems(apiUrl); // This now uses cache: 'no-store' via fetchItems
-    console.log('[API LIB] All scheduled courses fetched:', allScheduledCourses);
+    const allScheduledCourses = await fetchItems(apiUrl); 
+    console.log('[API LIB] Data received from /api/scheduledCourses:', JSON.stringify(allScheduledCourses, null, 2));
+
+    if (!Array.isArray(allScheduledCourses)) {
+        console.error('[API LIB] ERROR: allScheduledCourses is not an array! Received:', allScheduledCourses);
+        return []; // Return empty if not an array to prevent filter error
+    }
+    
+    allScheduledCourses.forEach((sc: any, index: number) => {
+        console.log(`[API LIB] Course ${index} - Original teacher_id:`, sc.teacher_id, `(Type: ${typeof sc.teacher_id})`);
+    });
 
     const filtered = allScheduledCourses
       .filter((sc: any) => {
-        // Defensive check for sc.teacher_id
-        return sc.teacher_id && String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true);
+        const isMatch = sc.teacher_id && String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true);
+        // if (isMatch) {
+        //   console.log(`[API LIB] Matched course: ${sc.scheduled_course_id} for teacher ${teacherId}`);
+        // }
+        return isMatch;
       });
-    console.log('[API LIB] Filtered courses for teacher:', filtered);
+    console.log(`[API LIB] Filtered courses for teacher ${teacherId}:`, JSON.stringify(filtered, null, 2));
 
     return filtered.map((sc: any) => ({ 
           scheduled_course_id: sc.scheduled_course_id, 
@@ -452,8 +462,7 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
 }
 
 export async function fetchStudentRoster(scheduledCourseId: string): Promise<Array<{ student_id: string; first_name: string; last_name: string; email: string; }>> {
-    // console.log('Fetching student roster for course:', scheduledCourseId);
-    const registrations = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`); // This now uses fetchItems
+    const registrations = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`);
     return registrations.map((reg: any) => ({
         student_id: String(reg.student_id),
         first_name: reg.first_name,
@@ -463,18 +472,15 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
 }
 
 export async function createCourseMaterial(scheduledCourseId: string, materialData: any) {
-    // console.log('Creating course material for course:', scheduledCourseId, 'data:', materialData);
     return createItem('courseMaterials', { ...materialData, scheduled_course_id: String(scheduledCourseId) });
 }
 
 export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; first_name: string; last_name: string; email: string; final_grade: string | null; grade_points: number | null;}>> {
-  // console.log('Fetching student registrations for grading, course:', scheduledCourseId);
-  return fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`); // This now uses fetchItems
+  return fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`); 
 }
 
 export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId: string): Promise<Record<string, Record<string, { score: number | null; feedback: string | null }>>> {
-  // console.log('Fetching all student assessment scores for course:', scheduledCourseId);
-  const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as any[]; // Uses fetchItems
+  const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as any[]; 
   
   const scoresMap: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
   studentEntries.forEach(entry => {
@@ -487,20 +493,17 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
 }
 
 export async function fetchAuditLogs(filters?: any) {
-    // console.log('Fetching audit logs with filters:', filters);
-    await new Promise(resolve => setTimeout(resolve, 100)); // Keep mock delay
+    await new Promise(resolve => setTimeout(resolve, 100)); 
     const limit = filters?.limit || 50;
     return mockDatabases.auditLogs.slice(0, limit);
 }
 
 export async function handleManualStudentRegistration(studentId: string, scheduledCourseId: string) {
-  // console.log(`Manually registering student ${studentId} for scheduled course ${scheduledCourseId}`);
   return createItem('registrations', { student_id: String(studentId), scheduled_course_id: String(scheduledCourseId), manualOverride: true });
 }
 
 export async function fetchAnnouncements({ role, departmentId }: { role: UserRole, departmentId?: string | number }) {
-  // console.log(`Fetching announcements for role: ${role}, departmentId: ${departmentId}`);
-  await new Promise(resolve => setTimeout(resolve, 100)); // Keep mock delay
+  await new Promise(resolve => setTimeout(resolve, 100)); 
   const now = new Date();
   const publishedAnnouncements = mockDatabases.announcements.filter((ann:any) => ann.status === 'Published' && new Date(ann.publish_date) <= now);
   
@@ -518,7 +521,6 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
 }
 
 export async function saveStudentAssessmentEntry(entry: { registration_id: string; assessment_id: string; score: number | null; feedback: string | null; student_id: string; student_assessment_id?: string; }) {
-    // console.log('Saving student assessment entry:', entry);
     const payload = {
         student_assessment_id: entry.student_assessment_id || undefined, 
         registration_id: String(entry.registration_id),
@@ -529,4 +531,3 @@ export async function saveStudentAssessmentEntry(entry: { registration_id: strin
     };
     return createItem('studentAssessments', payload); 
 }
-

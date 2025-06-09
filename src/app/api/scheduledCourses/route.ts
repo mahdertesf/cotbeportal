@@ -8,13 +8,6 @@ import { roomsStore } from '../rooms/data';   // Assuming roomsStore contains bu
 
 export async function GET(request: NextRequest) {
   try {
-    // For now, return the raw store to ensure teacher_id is present for filtering
-    // The enrichment can be re-enabled once the basic filtering is confirmed working.
-    // console.log("API GET /api/scheduledCourses returning raw store for teacher course assignment debug:", JSON.stringify(scheduledCoursesStore, null, 2));
-    return NextResponse.json(scheduledCoursesStore);
-    
-    // Original enrichment logic:
-    /*
     const enrichedScheduledCourses = scheduledCoursesStore.map(sc => {
         const course = coursesStore.find(c => String(c.id) === String(sc.course_id));
         const semester = semestersStore.find(s => String(s.id) === String(sc.semester_id));
@@ -22,21 +15,20 @@ export async function GET(request: NextRequest) {
         const room = roomsStore.find(r => String(r.id) === String(sc.room_id));
         
         return {
-            ...sc,
-            teacher_id: sc.teacher_id, // Ensure original teacher_id is passed through
+            ...sc, // Ensure all original fields like teacher_id are present
             course_code: course?.course_code,
             title: course?.title,
             credits: course?.credits, 
             description: course?.description, 
-            prerequisites: [], 
+            prerequisites: [], // Placeholder, should be fetched if needed for this view
             semester_name: semester?.name,
             teacher_name: teacher ? `${teacher.first_name} ${teacher.last_name}` : 'N/A',
             room_display_name: room ? `${room.room_number} (${room.building_name || 'N/A'})` : 'N/A', 
             schedule: `${sc.days_of_week || ''} ${sc.start_time || ''}-${sc.end_time || ''}`.trim(), 
         };
     });
+    // console.log("GET /api/scheduledCourses returning enriched data:", JSON.stringify(enrichedScheduledCourses, null, 2));
     return NextResponse.json(enrichedScheduledCourses);
-    */
   } catch (error) {
     console.error("Error fetching scheduled courses:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -82,4 +74,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: 'Error creating scheduled course', error: errorMessage }, { status: 500 });
   }
 }
-
