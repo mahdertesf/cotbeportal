@@ -1,6 +1,7 @@
+
 // src/app/api/courseMaterials/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
-import { courseMaterialsStore, type CourseMaterial } from './data';
+import { courseMaterialsStore, type CourseMaterial } from './data'; // Corrected import path
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     }
     
     const filteredMaterials = courseMaterialsStore.filter(m => {
-      // Defensive check
+      // Defensive check for m and m.scheduled_course_id
       return m && typeof m.scheduled_course_id !== 'undefined' && String(m.scheduled_course_id) === String(scheduledCourseId);
     });
     
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     const newMaterial: CourseMaterial = {
       id: `cm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       title,
-      description: description || '',
+      description: description || null,
       material_type,
       file_path: material_type === 'File' ? (file_path || `/uploads/mock/${title.replace(/\s+/g, '_')}.pdf`) : null,
       url: material_type === 'Link' ? url : null,

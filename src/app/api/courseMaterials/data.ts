@@ -1,3 +1,4 @@
+
 // src/app/api/courseMaterials/data.ts
 export interface CourseMaterial {
   id: string;
