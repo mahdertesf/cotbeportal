@@ -5,7 +5,7 @@
 
 import type { UserRole, UserProfile } from '@/stores/appStore';
 
-const MOCK_API_DELAY = 1000; // 1 second delay
+const MOCK_API_DELAY = 300; // Reduced delay for faster interaction with API routes
 
 // --- Auth ---
 export async function handleLogin(username: string, password_hash: string, role: UserRole) {
@@ -243,10 +243,15 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
 export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
   console.log('Fetching course materials for:', scheduledCourseId);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+  // Ensure 'scheduled_course_id' is correct in mock data or filtering
+  const materialsForCourse = mockDatabases.courseMaterials?.filter((m: any) => String(m.scheduled_course_id) === String(scheduledCourseId));
+  if (materialsForCourse && materialsForCourse.length > 0) {
+    return materialsForCourse;
+  }
+  // Fallback mock if no specific materials found for the course ID
   return [
-    { id: 'cm1', title: 'Syllabus', description: 'Course outline and policies', material_type: 'File', file_path: '/path/to/syllabus.pdf', url: null },
-    { id: 'cm2', title: 'Lecture 1 Slides', description: 'Introduction to Python', material_type: 'File', file_path: '/path/to/lecture1.pdf', url: null },
-    { id: 'cm3', title: 'Python Documentation', description: 'Official Python docs', material_type: 'Link', file_path: null, url: 'https://docs.python.org' },
+    { id: 'cm1', scheduled_course_id: scheduledCourseId, title: 'Syllabus', description: 'Course outline and policies', material_type: 'File', file_path: '/path/to/syllabus.pdf', url: null, uploaded_by: 'teacher-1', upload_timestamp: new Date().toISOString() },
+    { id: 'cm2', scheduled_course_id: scheduledCourseId, title: 'Lecture 1 Slides', description: 'Introduction to Topic', material_type: 'File', file_path: '/path/to/lecture1.pdf', url: null, uploaded_by: 'teacher-1', upload_timestamp: new Date().toISOString() },
   ];
 }
 
@@ -259,7 +264,7 @@ export async function fetchStudentAssessments(scheduledCourseId: string, student
         name: asm.name,
         max_score: asm.max_score,
         score: Math.random() > 0.5 ? Math.floor(Math.random() * asm.max_score) : null,
-        feedback: Math.random() > 0.5 ? 'Mock feedback.' : null,
+        feedback: Math.random() > 0.5 ? 'Mock feedback provided by system.' : null,
     }));
 }
 
@@ -454,6 +459,7 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
       
     if (roster.length > 0) return roster;
 
+    // Fallback mock data if no specific registrations found for a course
     if (scheduledCourseId === 'sc-fall24-cs101-a' || scheduledCourseId === 'sc-fall24-ee305-a' || scheduledCourseId === 'sc-fall24-ee305-b') {
         return [
             { student_id: 'stud1', first_name: 'Abebe', last_name: 'Bekele', email: 'abebe@example.com' },
@@ -466,7 +472,18 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
 export async function createCourseMaterial(scheduledCourseId: string, materialData: any) {
     console.log('Creating course material for course:', scheduledCourseId, 'data:', materialData);
     await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
-    return { success: true, data: { id: `cm-${Math.random()}`, ...materialData } };
+    const newMaterial = { 
+        material_id: `cm-${Date.now()}`, 
+        scheduled_course_id: scheduledCourseId,
+        uploaded_by: 'teacher-1', // Placeholder, ideally from current user
+        upload_timestamp: new Date().toISOString(),
+        ...materialData 
+    };
+    if (!mockDatabases.courseMaterials) {
+        mockDatabases.courseMaterials = [];
+    }
+    mockDatabases.courseMaterials.push(newMaterial);
+    return { success: true, data: newMaterial };
 }
 
 export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{
@@ -514,7 +531,7 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
       courseAssessments.forEach((asm: any) => {
         const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
         let score: number | null = null;
-        let feedback: string | null = "Mock feedback provided.";
+        let feedback: string | null = "Mock feedback provided by system.";
         if (Math.random() > 0.3) { 
             score = Math.floor(Math.random() * maxScore * 0.6 + maxScore * 0.4); 
         } else {
@@ -528,13 +545,14 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
 
 
 // --- Generic CRUD placeholders ---
-let mockDatabases: Record<string, any[]> = {
+// Global mock database store
+export let mockDatabases: Record<string, any[]> = {
   departments: [
-    {id: 'dept-1', name: 'Computer Science', description: 'Department of Computer Science and Engineering.'}, 
-    {id: 'dept-2', name: 'Electrical Engineering', description: 'Department of Electrical and Computer Engineering.'},
-    {id: 'dept-3', name: 'Mechanical Engineering', description: 'Department of Mechanical and Industrial Engineering.'},
-    {id: 'dept-4', name: 'Civil Engineering', description: 'Department of Civil and Environmental Engineering.'},
-    {id: 'dept-5', name: 'Biomedical Engineering', description: 'Department of Biomedical Engineering.'},
+    {id: 'dept-1', name: 'Computer Science', description: 'Department of Computer Science and Engineering.', created_at: new Date().toISOString(), updated_at: new Date().toISOString()}, 
+    {id: 'dept-2', name: 'Electrical Engineering', description: 'Department of Electrical and Computer Engineering.', created_at: new Date().toISOString(), updated_at: new Date().toISOString()},
+    {id: 'dept-3', name: 'Mechanical Engineering', description: 'Department of Mechanical and Industrial Engineering.', created_at: new Date().toISOString(), updated_at: new Date().toISOString()},
+    {id: 'dept-4', name: 'Civil Engineering', description: 'Department of Civil and Environmental Engineering.', created_at: new Date().toISOString(), updated_at: new Date().toISOString()},
+    {id: 'dept-5', name: 'Biomedical Engineering', description: 'Department of Biomedical Engineering.', created_at: new Date().toISOString(), updated_at: new Date().toISOString()},
   ],
   courses: [
     {id: 'course-1', course_code: 'CS101', title: 'Introduction to Programming', description: 'Fundamentals of programming using Python.', credits: 3, department_id: 'dept-1'},
@@ -577,14 +595,20 @@ let mockDatabases: Record<string, any[]> = {
     { announcement_id: 'anno-4', title: 'Portal Maintenance Downtime', content: 'The CoTBE portal will be down for scheduled maintenance on Saturday, September 7th, from 2 AM to 4 AM.', author_id: 'staff1', target_audience: 'All Portal Users', status: 'Published', publish_date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { announcement_id: 'anno-5', title: 'Staff Training Session', content: 'A training session for all administrative staff on the new HR software will be held next Monday.', author_id: 'staff1', target_audience: 'All Staff', status: 'Draft', publish_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), department_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   ],
+  courseMaterials: [
+    { material_id: 'cm-1', scheduled_course_id: 'sc-fall24-cs101-a', title: 'CS101 Syllabus', description: 'Course outline for CS101', material_type: 'File', file_path: '/mock/cs101_syllabus.pdf', url: null, uploaded_by: 'teacher-2', upload_timestamp: new Date().toISOString() },
+    { material_id: 'cm-2', scheduled_course_id: 'sc-fall24-cs101-a', title: 'CS101 Lecture 1', description: 'Intro to Python', material_type: 'File', file_path: '/mock/cs101_lec1.pdf', url: null, uploaded_by: 'teacher-2', upload_timestamp: new Date().toISOString() },
+    { material_id: 'cm-3', scheduled_course_id: 'sc-fall24-ee305-a', title: 'EE305 Lab Manual', description: 'Lab experiments for Digital Logic', material_type: 'File', file_path: '/mock/ee305_lab.pdf', url: null, uploaded_by: 'teacher-1', upload_timestamp: new Date().toISOString() },
+  ],
 };
 
+// Initialize mock assessments for scheduled courses
 mockDatabases.scheduledCourses.forEach(sc => {
     const courseIdKey = `assessments?courseId=${sc.scheduled_course_id}`;
-    if (!mockDatabases.assessments[courseIdKey]) {
-        mockDatabases.assessments[courseIdKey] = [
-            { id: `asm-${sc.scheduled_course_id}-1`, scheduledCourseId: sc.scheduled_course_id, name: `Quiz 1 (${sc.course_id})`, description: 'Covers week 1-3.', max_score: 20, due_date: '2024-09-15T23:59:00Z', type: 'Quiz' },
-            { id: `asm-${sc.scheduled_course_id}-2`, scheduledCourseId: sc.scheduled_course_id, name: `Midterm (${sc.course_id})`, description: 'Comprehensive Midterm.', max_score: 30, due_date: '2024-10-15T23:59:00Z', type: 'Exam' },
+    if (!mockDatabases.assessments[courseIdKey]) { // Check if assessments for this course key exist
+        mockDatabases.assessments[courseIdKey] = [ // Use the courseIdKey as the key
+            { id: `asm-${sc.scheduled_course_id}-1`, scheduledCourseId: sc.scheduled_course_id, name: `Quiz 1 (${sc.course_id})`, description: 'Covers week 1-3 materials.', max_score: 20, due_date: '2024-09-15T23:59:00Z', type: 'Quiz' },
+            { id: `asm-${sc.scheduled_course_id}-2`, scheduledCourseId: sc.scheduled_course_id, name: `Midterm Exam (${sc.course_id})`, description: 'Comprehensive Midterm Examination.', max_score: 30, due_date: '2024-10-15T23:59:00Z', type: 'Exam' },
         ];
     }
 });
@@ -593,6 +617,15 @@ mockDatabases.scheduledCourses.forEach(sc => {
 export async function fetchItems(entity: string, filters?: any) {
   console.log(`Fetching ${entity} with filters:`, filters);
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+
+  if (entity === 'departments') {
+    const response = await fetch('/api/departments', { cache: 'no-store' }); // Ensure fresh data
+    if (!response.ok) {
+      console.error('Failed to fetch departments from API:', response.statusText);
+      throw new Error('Failed to fetch departments');
+    }
+    return await response.json();
+  }
 
   if (mockDatabases[entity]) {
     return JSON.parse(JSON.stringify(mockDatabases[entity])); 
@@ -627,21 +660,36 @@ export async function fetchStudentFinalGradesForCourse(scheduledCourseId: string
 
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);
-  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   
+  if (entity === 'departments') {
+    const response = await fetch('/api/departments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Failed to create department' }));
+      console.error('Failed to create department via API:', response.statusText, errorData);
+      return { success: false, error: errorData.message || 'Failed to create department', data: null };
+    }
+    const newDepartment = await response.json();
+    return { success: true, data: newDepartment, error: null };
+  }
+
+  // Fallback to mock database for other entities
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   let newItem = { ...data };
   
   if (entity === 'users') {
-    // Ensure username (ID) is unique for new users
     if (mockDatabases.users.some(u => u.username === data.username)) {
         return { success: false, error: `Username/ID "${data.username}" already exists.`, data: null };
     }
     newItem = {
-        user_id: data.username, // Use username as user_id for new users as per requirement
+        user_id: data.username, 
         is_active: true,
         date_joined: new Date().toISOString(),
-        last_login: null, // New user hasn't logged in
-        password_hash: `hashed_${data.username}`, // Default password is username (mock hashed)
+        last_login: null, 
+        password_hash: `hashed_${data.username}`, 
         ...data,
     } as UserProfile;
   } else if (entity === 'scheduledCourses') {
@@ -671,8 +719,24 @@ export async function createItem(entity: string, data: any) {
 
 export async function updateItem(entity: string, id: string | number, data: any) {
   console.log(`Updating ${entity} ${id}:`, data);
-  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
+
+  if (entity === 'departments') {
+    const response = await fetch(`/api/departments/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Failed to update department' }));
+      console.error('Failed to update department via API:', response.statusText, errorData);
+      return { success: false, error: errorData.message || 'Failed to update department', data: null };
+    }
+    const updatedDepartment = await response.json();
+    return { success: true, data: updatedDepartment, error: null };
+  }
   
+  // Fallback to mock database for other entities
+  await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   let itemUpdated = false;
   let updatedItemData = null;
   const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
@@ -706,6 +770,20 @@ export async function updateItem(entity: string, id: string | number, data: any)
 
 export async function deleteItem(entity: string, id: string | number) {
   console.log(`Deleting ${entity} ${id}`);
+
+  if (entity === 'departments') {
+    const response = await fetch(`/api/departments/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Failed to delete department' }));
+      console.error('Failed to delete department via API:', response.statusText, errorData);
+      return { success: false, error: errorData.message || 'Failed to delete department' };
+    }
+    return { success: true };
+  }
+
+  // Fallback to mock database for other entities
   await new Promise(resolve => setTimeout(resolve, MOCK_API_DELAY));
   const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
 
@@ -802,10 +880,6 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
     if (role === 'Student' && ann.target_audience === 'Specific Department Students' && String(ann.department_id) === String(departmentId)) return true;
     if (role === 'Teacher' && ann.target_audience === 'Specific Department Faculty' && String(ann.department_id) === String(departmentId)) return true;
     
-    // Staff Heads and Admins should also see department specific announcements if they belong to that dept
-    // This part might need more refined logic based on how staff/admin department affiliation is stored or determined.
-    // For now, assume Staff Head/Admin don't filter by department for their own announcements but see all relevant to staff/all.
-
     return false;
   });
 
@@ -814,8 +888,7 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
   return relevantAnnouncements;
 }
     
-// Initialize mock users if empty
+// Comment: Initialize mock users if empty
 if (!mockDatabases.users || mockDatabases.users.length === 0) {
   fetchAllUsers(); // This will populate mockDatabases.users
 }
-
