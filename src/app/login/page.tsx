@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -39,6 +40,14 @@ export default function LoginPage() {
       toast({
         title: "Role Required",
         description: "Please select your role to log in.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!username || !password) {
+      toast({
+        title: "Credentials Required",
+        description: "Please enter both username and password.",
         variant: "destructive",
       });
       return;
@@ -121,7 +130,7 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="e.g. johndoe or your ID"
-            // required (can be lenient during bypass)
+            required
           />
         </div>
         <div className="space-y-2">
@@ -132,7 +141,7 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="********"
-            // required (can be lenient during bypass)
+            required
           />
         </div>
         <Button type="submit" className="w-full" disabled={isSubmitting || globalIsLoading}>
@@ -140,12 +149,6 @@ export default function LoginPage() {
           Login
         </Button>
       </form>
-      <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md text-sm">
-        <p className="font-bold">DEVELOPMENT NOTE:</p>
-        <p>Login is currently using a temporary bypass. Username and password fields are optional for some roles. Select a role and click Login to proceed with mock data.</p>
-         <p className="mt-1">Default username/password (if not bypassing): admin/admin, staff.one/staff.one, teacher.one/teacher.one, student.one/student.one</p>
-        <p className="font-bold text-red-600 mt-2">CRITICAL SECURITY WARNING: This bypass MUST be removed for production.</p>
-      </div>
     </AuthFormCard>
   );
 }
