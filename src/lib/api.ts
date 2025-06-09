@@ -102,8 +102,6 @@ export let mockDatabases: Record<string, any[]> = {
 
 
 export async function fetchItems(entityOrQuery: string, id?: string | number, filters?: any) {
-  // console.log(`Fetching ${entityOrQuery}${id ? `/${id}` : ''} with filters:`, filters);
-  
   const entityToApiMap: Record<string, string> = {
     'users': '/api/users',
     'departments': '/api/departments',
@@ -120,34 +118,52 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
   
   let entityName = entityOrQuery;
   let queryParamsString = '';
+  let isApiCall = false;
+  let apiUrl = '';
 
-  if (entityOrQuery.includes('?')) {
+  if (entityOrQuery.startsWith('/api/')) {
+    apiUrl = entityOrQuery; // Use the full path directly
+    isApiCall = true;
+     if (id) { // This case should ideally not happen if full path is given with ID already
+        apiUrl = `${apiUrl}/${id}`;
+    }
+  } else if (entityOrQuery.includes('?')) {
     const [path, query] = entityOrQuery.split('?');
     entityName = path;
     queryParamsString = query;
-  }
-
-  let apiUrl = entityToApiMap[entityName];
-
-  if (apiUrl) {
-    if (id) {
+    apiUrl = entityToApiMap[entityName] || '';
+    isApiCall = !!apiUrl;
+  } else {
+    entityName = entityOrQuery;
+    apiUrl = entityToApiMap[entityName] || '';
+    isApiCall = !!apiUrl;
+    if (id && apiUrl) {
         apiUrl = `${apiUrl}/${id}`;
     }
+  }
+
+
+  if (isApiCall && apiUrl) {
     if (filters && Object.keys(filters).length > 0) {
         const queryParams = new URLSearchParams(filters as any);
         apiUrl = `${apiUrl}?${queryParams.toString()}`;
-    } else if (queryParamsString) {
+    } else if (queryParamsString && !apiUrl.includes('?')) { // only add if not already part of apiUrl
          apiUrl = `${apiUrl}?${queryParamsString}`;
     }
 
-    const response = await fetch(apiUrl, { cache: 'no-store' });
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: `API request failed for ${entityOrQuery} with status ${response.status}` }));
-        const errorMessage = errorData.message || errorData.error || `Failed to fetch ${entityOrQuery}. Status: ${response.status}, Details: ${JSON.stringify(errorData)}`;
-        console.error(`Error fetching ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}, Error: ${errorMessage}`);
-        throw new Error(errorMessage);
+    try {
+      const response = await fetch(apiUrl, { cache: 'no-store' });
+      if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: `API request failed for ${entityOrQuery} with status ${response.status}` }));
+          const errorMessage = errorData.message || errorData.error || `Failed to fetch ${entityOrQuery}. Status: ${response.status}`;
+          console.error(`Error fetching ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}, Error: ${errorMessage}, Response Body: ${JSON.stringify(errorData)}`);
+          throw new Error(errorMessage);
+      }
+      return response.json();
+    } catch (error) {
+       console.error(`Network or parsing error fetching ${entityOrQuery} from API at ${apiUrl}:`, error);
+       throw error; // Re-throw the error to be caught by the caller
     }
-    return response.json();
   }
   
   // Fallback to mockDatabases if no API route is mapped (should be phased out)
@@ -161,14 +177,12 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
     return allUsers.filter((user: UserProfile) => user.role === 'Teacher')
                    .map((user: UserProfile) => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name, department_id: user.department_id }));
   }
-  console.warn(`fetchItems: Entity or Query "${entityOrQuery}" not found in API routes or mockDatabases.`);
-  return [];
+  console.warn(`fetchItems: Entity or Query "${entityOrQuery}" not found in API routes or local mockDatabases.`);
+  return []; // Return empty array if no match
 }
 
 
 export async function createItem(entity: string, data: any): Promise<{ success: boolean, data?: any, error?: string, message?: string }> {
-  // console.log(`Creating ${entity}:`, data);
-
   const entityToApiMap: Record<string, string> = {
     'users': '/api/users',
     'departments': '/api/departments',
@@ -190,6 +204,11 @@ export async function createItem(entity: string, data: any): Promise<{ success: 
       body: JSON.stringify(data),
       cache: 'no-store',
     });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `API request failed for creating ${entity} with status ${response.status}`}));
+        console.error(`Error creating ${entity} via API. Status: ${response.status}, Body: ${JSON.stringify(errorData)}`);
+        return { success: false, error: errorData.error || errorData.message || `Failed to create ${entity}.` };
+    }
     return response.json();
   }
   
@@ -220,8 +239,6 @@ export async function createItem(entity: string, data: any): Promise<{ success: 
 }
 
 export async function updateItem(entity: string, id: string | number, data: any): Promise<{ success: boolean, data?: any, error?: string, message?: string }> {
-  // console.log(`Updating ${entity} ${id}:`, data);
-
   const entityToApiMap: Record<string, string> = {
     'users': `/api/users/${id}`,
     'departments': `/api/departments/${id}`,
@@ -252,6 +269,11 @@ export async function updateItem(entity: string, id: string | number, data: any)
       body: JSON.stringify(data),
       cache: 'no-store',
     });
+     if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `API request failed for updating ${entity} with status ${response.status}`}));
+        console.error(`Error updating ${entity} via API. Status: ${response.status}, Body: ${JSON.stringify(errorData)}`);
+        return { success: false, error: errorData.error || errorData.message || `Failed to update ${entity}.` };
+    }
     return response.json();
   }
 
@@ -274,8 +296,6 @@ export async function updateItem(entity: string, id: string | number, data: any)
 }
 
 export async function deleteItem(entity: string, id: string | number): Promise<{ success: boolean, message?: string, error?: string }> {
-  // console.log(`Deleting ${entity} ${id}`);
-  
   const entityToApiMap: Record<string, string> = {
     'users': `/api/users/${id}`,
     'departments': `/api/departments/${id}`,
@@ -291,6 +311,11 @@ export async function deleteItem(entity: string, id: string | number): Promise<{
 
   if (entityToApiMap[entity]) {
     const response = await fetch(entityToApiMap[entity], { method: 'DELETE', cache: 'no-store' });
+     if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `API request failed for deleting ${entity} with status ${response.status}`}));
+        console.error(`Error deleting ${entity} via API. Status: ${response.status}, Body: ${JSON.stringify(errorData)}`);
+        return { success: false, error: errorData.error || errorData.message || `Failed to delete ${entity}.` };
+    }
     return response.json();
   }
 
@@ -309,17 +334,23 @@ export async function deleteItem(entity: string, id: string | number): Promise<{
 // --- Specific fetch functions (some now use API routes, some still MOCK or need API route migration) ---
 
 export async function fetchAvailableCourses(filters?: any) {
-  // console.log('Fetching available courses with filters:', filters);
-  
   let queryString = '';
   if (filters) {
     const params = new URLSearchParams();
     if (filters.semesterId) params.append('semesterId', filters.semesterId);
     if (filters.departmentId) params.append('departmentId', filters.departmentId);
+    // Note: The /api/scheduledCourses GET endpoint does not currently support server-side filtering by semester/department.
+    // This filtering would happen client-side after fetching all scheduled courses if needed.
+    // For now, we'll just pass them if they exist, but the API won't use them.
     queryString = params.toString();
   }
 
-  const scheduledCoursesFromApi = await fetchItems(`scheduledCourses${queryString ? `?${queryString}` : ''}`);
+  const scheduledCoursesFromApi = await fetchItems(`/api/scheduledCourses${queryString ? `?${queryString}` : ''}`);
+
+  if (!Array.isArray(scheduledCoursesFromApi)) {
+    console.error("fetchAvailableCourses: API did not return an array. Data:", scheduledCoursesFromApi);
+    return [];
+  }
 
   return scheduledCoursesFromApi.map((sc: any) => ({
       id: sc.scheduled_course_id, 
@@ -343,11 +374,16 @@ export async function handleRegisterCourse(scheduledCourseId: string, studentId:
 }
 
 export async function handleDropCourse(registrationId: string) {
+  // To drop, we update the status to 'Dropped'. Deleting might be too permanent.
   return updateItem('registrations', registrationId, { status: 'Dropped' });
 }
 
 export async function fetchStudentRegisteredCourses(studentId: string | number) {
   const registrations = await fetchItems(`registrations?studentId=${studentId}`);
+  if (!Array.isArray(registrations)) {
+      console.error("fetchStudentRegisteredCourses: API did not return an array. Data:", registrations);
+      return [];
+  }
   return registrations.map((reg: any) => ({
       registrationId: reg.registration_id,
       scheduledCourseId: reg.scheduled_course_id,
@@ -371,13 +407,24 @@ export async function fetchStudentAssessments(studentId: string | number, schedu
 
     let studentScores: any[] = [];
     if (currentRegistration) {
+        // Fetch scores for the specific registration
         studentScores = await fetchItems(`studentAssessments?registrationId=${currentRegistration.registration_id}`) as any[];
     }
     
+    if (!Array.isArray(courseAssessments)) {
+        console.error("fetchStudentAssessments: courseAssessments is not an array", courseAssessments);
+        return [];
+    }
+    if (!Array.isArray(studentScores)) {
+        console.error("fetchStudentAssessments: studentScores is not an array", studentScores);
+        // Potentially set studentScores to [] here if it's not critical to have them
+    }
+
+
     return courseAssessments.map(asm => {
         const scoreEntry = studentScores.find(sc => String(sc.assessment_id) === String(asm.id) && String(sc.registration_id) === String(currentRegistration?.registration_id));
         return {
-            id: asm.id,
+            id: asm.id, // Assessment ID
             name: asm.name,
             description: asm.description,
             max_score: asm.max_score,
@@ -424,30 +471,25 @@ export async function fetchAcademicHistory(studentId: string | number) {
 }
 
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
-    console.log('[API LIB] Attempting to fetch courses for teacher ID:', teacherId);
+    // console.log('[API LIB] Attempting to fetch courses for teacher ID:', teacherId, 'semester:', semesterId);
     let apiUrl = `/api/scheduledCourses`; 
     
     const allScheduledCourses = await fetchItems(apiUrl); 
-    console.log('[API LIB] Data received from /api/scheduledCourses:', JSON.stringify(allScheduledCourses, null, 2));
+    // console.log('[API LIB] Data received from /api/scheduledCourses:', JSON.stringify(allScheduledCourses, null, 2));
 
     if (!Array.isArray(allScheduledCourses)) {
         console.error('[API LIB] ERROR: allScheduledCourses is not an array! Received:', allScheduledCourses);
         return []; // Return empty if not an array to prevent filter error
     }
     
-    allScheduledCourses.forEach((sc: any, index: number) => {
-        console.log(`[API LIB] Course ${index} - Original teacher_id:`, sc.teacher_id, `(Type: ${typeof sc.teacher_id})`);
-    });
+    // allScheduledCourses.forEach((sc: any, index: number) => {
+    //     console.log(`[API LIB] Course ${index} - Original teacher_id:`, sc.teacher_id, `(Type: ${typeof sc.teacher_id})`);
+    // });
 
     const filtered = allScheduledCourses
-      .filter((sc: any) => {
-        const isMatch = sc.teacher_id && String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true);
-        // if (isMatch) {
-        //   console.log(`[API LIB] Matched course: ${sc.scheduled_course_id} for teacher ${teacherId}`);
-        // }
-        return isMatch;
-      });
-    console.log(`[API LIB] Filtered courses for teacher ${teacherId}:`, JSON.stringify(filtered, null, 2));
+      .filter((sc: any) => sc.teacher_id && String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true));
+      
+    // console.log(`[API LIB] Filtered courses for teacher ${teacherId}:`, JSON.stringify(filtered, null, 2));
 
     return filtered.map((sc: any) => ({ 
           scheduled_course_id: sc.scheduled_course_id, 
@@ -463,6 +505,10 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
 
 export async function fetchStudentRoster(scheduledCourseId: string): Promise<Array<{ student_id: string; first_name: string; last_name: string; email: string; }>> {
     const registrations = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`);
+     if (!Array.isArray(registrations)) {
+        console.error("fetchStudentRoster: API did not return an array. Data:", registrations);
+        return [];
+    }
     return registrations.map((reg: any) => ({
         student_id: String(reg.student_id),
         first_name: reg.first_name,
@@ -483,6 +529,10 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
   const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as any[]; 
   
   const scoresMap: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
+  if (!Array.isArray(studentEntries)) {
+      console.error("fetchAllStudentAssessmentScoresForCourse: studentEntries is not an array", studentEntries);
+      return scoresMap;
+  }
   studentEntries.forEach(entry => {
       if (!scoresMap[String(entry.student_id)]) {
           scoresMap[String(entry.student_id)] = {};
@@ -531,3 +581,4 @@ export async function saveStudentAssessmentEntry(entry: { registration_id: strin
     };
     return createItem('studentAssessments', payload); 
 }
+
