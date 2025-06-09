@@ -6,8 +6,12 @@ export async function handleLogin(username: string, password_hash: string, role:
   const response = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password: password_hash, role }), // API expects 'password'
+    body: JSON.stringify({ username, password: password_hash, role }),
   });
+  if (!response.ok) { // Improved error handling for login
+    const errorData = await response.json().catch(() => ({error: 'Login failed, server error'}));
+    return { success: false, error: errorData.error || 'Login failed', data: null };
+  }
   return response.json();
 }
 
@@ -24,7 +28,7 @@ export async function handleResetPassword(token: string, newPassword_hash: strin
   const response = await fetch('/api/auth/reset-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, newPassword: newPassword_hash }), // API expects 'newPassword'
+    body: JSON.stringify({ token, newPassword: newPassword_hash }),
   });
   return response.json();
 }
@@ -39,14 +43,14 @@ export async function handleChangePassword(userId: string | number, currentPassw
 }
 
 
-// --- User Management (Staff) ---
+// --- User Management ---
 export async function fetchAllUsers(): Promise<UserProfile[]> {
   const response = await fetch('/api/users');
   if (!response.ok) throw new Error('Failed to fetch users');
   return response.json();
 }
 
-// --- Profile Fetching (Points to generic user fetch for now) ---
+// --- Profile Fetching ---
 export async function fetchStudentProfile(userId: string | number): Promise<UserProfile> {
   const response = await fetch(`/api/users/${userId}`);
   if (!response.ok) throw new Error('Failed to fetch student profile');
@@ -71,7 +75,7 @@ export async function fetchStaffProfile(userId: string | number): Promise<UserPr
   return user;
 }
 
-// --- Profile Updating (Points to generic user update for now) ---
+// --- Profile Updating ---
 export async function updateStudentProfile(userId: string | number, data: Partial<UserProfile>) {
   const response = await fetch(`/api/users/${userId}`, {
     method: 'PUT',
@@ -80,7 +84,7 @@ export async function updateStudentProfile(userId: string | number, data: Partia
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({error: 'Failed to update student profile'}));
-    return { success: false, error: errorData.error || errorData.message, data: null };
+    return { success: false, error: errorData.message || errorData.error, data: null };
   }
   return { success: true, data: await response.json() };
 }
@@ -93,7 +97,7 @@ export async function updateTeacherProfile(userId: string | number, data: Partia
   });
    if (!response.ok) {
     const errorData = await response.json().catch(() => ({error: 'Failed to update teacher profile'}));
-    return { success: false, error: errorData.error || errorData.message, data: null };
+    return { success: false, error: errorData.message || errorData.error, data: null };
   }
   return { success: true, data: await response.json() };
 }
@@ -106,37 +110,15 @@ export async function updateStaffProfile(userId: string | number, data: Partial<
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({error: 'Failed to update staff profile'}));
-    return { success: false, error: errorData.error || errorData.message, data: null };
+    return { success: false, error: errorData.message || errorData.error, data: null };
   }
   return { success: true, data: await response.json() };
 }
 
 
-// --- Generic CRUD section (to be expanded) ---
-// In-memory store for entities not yet moved to API routes
-// This will shrink as more entities get their own API routes.
+// --- Generic CRUD section ---
 export let mockDatabases: Record<string, any[]> = {
-  // usersStore is now in api/users/data.ts
-  // departmentsStore is now in api/departments/data.ts
-  courses: [
-    {id: 'course-1', course_code: 'CS101', title: 'Introduction to Programming', description: 'Fundamentals of programming using Python.', credits: 3, department_id: 'dept-1'},
-    {id: 'course-2', course_code: 'EE201', title: 'Circuit Theory I', description: 'Basic electric circuit analysis.', credits: 4, department_id: 'dept-2'},
-    {id: 'course-3', course_code: 'MECH210', title: 'Statics', description: 'Principles of engineering mechanics.', credits: 3, department_id: 'dept-3'},
-    {id: 'course-4', course_code: 'CS350', title: 'Software Engineering', description: 'Software development lifecycle and methodologies.', credits: 3, department_id: 'dept-1'},
-    {id: 'course-5', course_code: 'EE305', title: 'Digital Logic Design', description: 'Design and analysis of digital circuits.', credits: 3, department_id: 'dept-2'},
-  ],
-  semesters: [
-    { id: 'sem-1', name: 'Fall 2024', academic_year: 2024, term: 'Semester One', start_date: '2024-09-02', end_date: '2024-12-20', registration_start_date: '2024-07-15T09:00', registration_end_date: '2024-08-30T17:00', add_drop_start_date: '2024-09-02T09:00', add_drop_end_date: '2024-09-09T17:00' },
-    { id: 'sem-2', name: 'Spring 2025', academic_year: 2025, term: 'Semester Two', start_date: '2025-01-13', end_date: '2025-05-09', registration_start_date: '2024-11-15T09:00', registration_end_date: '2025-01-10T17:00', add_drop_start_date: '2025-01-13T09:00', add_drop_end_date: '2025-01-20T17:00' },
-  ],
-  buildings: [
-    { id: 'bldg-1', name: 'Main Engineering Building', address: '1 Engineering Drive, CoTBE Campus' },
-    { id: 'bldg-2', name: 'Technology Hall', address: '2 Innovation Avenue, CoTBE Campus' },
-  ],
-  rooms: [ 
-    { id: 'room-1', building_id: 'bldg-1', room_number: '101', capacity: 50, type: 'Lecture Hall', building_name: 'Main Engineering Building' },
-    { id: 'room-2', building_id: 'bldg-2', room_number: 'A205', capacity: 75, type: 'Lecture Hall', building_name: 'Technology Hall' },
-  ],
+  // Users, Departments, Courses, Semesters, Buildings, Rooms are now managed by API routes
   scheduledCourses: [
     { scheduled_course_id: 'sc-fall24-cs101-a', course_id: 'course-1', semester_id: 'sem-1', teacher_id: 'teacher-2', room_id: 'room-1', section_number: 'A', max_capacity: 50, current_enrollment: 2, days_of_week: 'MWF', start_time: '09:00', end_time: '09:50' },
     { scheduled_course_id: 'sc-fall24-ee305-a', course_id: 'course-5', semester_id: 'sem-1', teacher_id: 'teacher-1', room_id: 'room-2', section_number: 'A', max_capacity: 30, current_enrollment: 1, days_of_week: 'TTH', start_time: '13:00', end_time: '14:15' },
@@ -174,26 +156,33 @@ mockDatabases.scheduledCourses.forEach(sc => {
 export async function fetchItems(entity: string, filters?: any) {
   console.log(`Fetching ${entity} with filters:`, filters);
   
-  if (entity === 'departments') {
-    const response = await fetch('/api/departments');
-    if (!response.ok) throw new Error('Failed to fetch departments from API');
+  const entityToApiMap: Record<string, string> = {
+    'users': '/api/users',
+    'departments': '/api/departments',
+    'courses': '/api/courses',
+    'semesters': '/api/semesters',
+    'buildings': '/api/buildings',
+    'rooms': '/api/rooms',
+  };
+
+  if (entityToApiMap[entity]) {
+    const response = await fetch(entityToApiMap[entity]);
+    if (!response.ok) throw new Error(`Failed to fetch ${entity} from API`);
     return response.json();
   }
-  // Add other entities here to fetch from their respective API routes
-  // e.g., if (entity === 'courses') { const response = await fetch('/api/courses'); ... }
   
   // Fallback to mockDatabases for entities not yet migrated
   if (mockDatabases[entity]) {
     return JSON.parse(JSON.stringify(mockDatabases[entity]));
   }
-  if (entity === 'teachers') { // Special case for teachers as they are derived from users
-    const response = await fetch('/api/users?role=Teacher'); // Assuming API supports role filter
+  if (entity === 'teachers') { 
+    const response = await fetch('/api/users?role=Teacher');
     if (!response.ok) throw new Error('Failed to fetch teachers');
     const allUsers = await response.json();
     return allUsers.filter((user: UserProfile) => user.role === 'Teacher')
                    .map((user: UserProfile) => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name, department_id: user.department_id }));
   }
-  if (entity.startsWith('assessments?courseId=')) { // Example for assessments
+  if (entity.startsWith('assessments?courseId=')) { 
     return JSON.parse(JSON.stringify(mockDatabases.assessments[entity] || []));
   }
   console.warn(`fetchItems: Entity "${entity}" not found in API routes or mockDatabases.`);
@@ -204,30 +193,34 @@ export async function fetchItems(entity: string, filters?: any) {
 export async function createItem(entity: string, data: any) {
   console.log(`Creating ${entity}:`, data);
 
-  if (entity === 'users') {
-    const response = await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return response.json();
-  }
-  if (entity === 'departments') {
-    const response = await fetch('/api/departments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return response.json();
-  }
-  // Add other entities here to post to their respective API routes
+  const entityToApiMap: Record<string, string> = {
+    'users': '/api/users',
+    'departments': '/api/departments',
+    'courses': '/api/courses',
+    'semesters': '/api/semesters',
+    'buildings': '/api/buildings',
+    'rooms': '/api/rooms',
+  };
 
-  // Fallback to direct mock manipulation for entities not yet migrated
-  await new Promise(resolve => setTimeout(resolve, 100)); // Simulate delay
-  let newItem = { ...data };
-  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
+  if (entityToApiMap[entity]) {
+    const response = await fetch(entityToApiMap[entity], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({error: `Failed to create ${entity}`}));
+      return { success: false, error: errorData.message || errorData.error, data: null };
+    }
+    return { success: true, data: await response.json() };
+  }
   
-  if (!data[idKey] && idKey === 'id') { // Generate generic ID if not user-related
+  // Fallback to direct mock manipulation for entities not yet migrated
+  await new Promise(resolve => setTimeout(resolve, 100)); 
+  let newItem = { ...data };
+  const idKey = entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
+  
+  if (!data[idKey] && idKey === 'id') { 
      newItem.id = `${entity.slice(0,4)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
   
@@ -240,7 +233,6 @@ export async function createItem(entity: string, data: any) {
      newItem.created_at = new Date().toISOString();
      newItem.updated_at = new Date().toISOString();
   }
-  // ... other specific entity initializations ...
 
   if (mockDatabases[entity]) {
     mockDatabases[entity].push(newItem);
@@ -259,29 +251,33 @@ export async function createItem(entity: string, data: any) {
 export async function updateItem(entity: string, id: string | number, data: any) {
   console.log(`Updating ${entity} ${id}:`, data);
 
-  if (entity === 'users') {
-    const response = await fetch(`/api/users/${id}`, {
+  const entityToApiMap: Record<string, string> = {
+    'users': `/api/users/${id}`,
+    'departments': `/api/departments/${id}`,
+    'courses': `/api/courses/${id}`,
+    'semesters': `/api/semesters/${id}`,
+    'buildings': `/api/buildings/${id}`,
+    'rooms': `/api/rooms/${id}`,
+  };
+
+  if (entityToApiMap[entity]) {
+    const response = await fetch(entityToApiMap[entity], {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    return response.json();
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({error: `Failed to update ${entity}`}));
+      return { success: false, error: errorData.message || errorData.error, data: null };
+    }
+    return { success: true, data: await response.json() };
   }
-  if (entity === 'departments') {
-    const response = await fetch(`/api/departments/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return response.json();
-  }
-  // Add other entities here
 
   // Fallback to direct mock manipulation
   await new Promise(resolve => setTimeout(resolve, 100));
   let itemUpdated = false;
   let updatedItemData = null;
-  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
+  const idKey = entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const index = mockDatabases[entity].findIndex((item: any) => String(item[idKey]) === String(id));
@@ -307,21 +303,27 @@ export async function updateItem(entity: string, id: string | number, data: any)
 export async function deleteItem(entity: string, id: string | number) {
   console.log(`Deleting ${entity} ${id}`);
   
-  if (entity === 'departments') {
-    const response = await fetch(`/api/departments/${id}`, { method: 'DELETE' });
-    if (!response.ok) return { success: false, error: (await response.json()).message || "Failed to delete from API" };
-    return { success: true };
+  const entityToApiMap: Record<string, string> = {
+    'users': `/api/users/${id}`,
+    'departments': `/api/departments/${id}`,
+    'courses': `/api/courses/${id}`,
+    'semesters': `/api/semesters/${id}`,
+    'buildings': `/api/buildings/${id}`,
+    'rooms': `/api/rooms/${id}`,
+  };
+
+  if (entityToApiMap[entity]) {
+    const response = await fetch(entityToApiMap[entity], { method: 'DELETE' });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({error: `Failed to delete ${entity}`}));
+        return { success: false, error: errorData.message || "Failed to delete from API" };
+    }
+    return { success: true, message: (await response.json()).message };
   }
-  if (entity === 'users') {
-    const response = await fetch(`/api/users/${id}`, { method: 'DELETE' });
-     if (!response.ok) return { success: false, error: (await response.json()).message || "Failed to delete user from API" };
-    return { success: true };
-  }
-  // Add other entities here
 
   // Fallback to direct mock manipulation
   await new Promise(resolve => setTimeout(resolve, 100));
-  const idKey = entity === 'users' ? 'user_id' : entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
+  const idKey = entity === 'scheduledCourses' ? 'scheduled_course_id' : entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const initialLength = mockDatabases[entity].length;
@@ -342,12 +344,19 @@ export async function deleteItem(entity: string, id: string | number) {
 export async function fetchAvailableCourses(filters?: any) {
   console.log('Fetching available courses with filters:', filters);
   // TODO: Migrate to /api/available-courses or similar
-  await new Promise(resolve => setTimeout(resolve, 100));
-  const allScheduled = mockDatabases.scheduledCourses;
-  const catalog = mockDatabases.courses;
-  const allUsers = await fetchAllUsers(); // Uses API
-  const teachers = allUsers.filter(u => u.role === 'Teacher');
-  const rooms = mockDatabases.rooms;
+  await new Promise(resolve => setTimeout(resolve, 100)); // Simulate delay
+  
+  // These should now fetch from their respective API endpoints or in-memory stores if already migrated.
+  const allScheduled = mockDatabases.scheduledCourses; // Keep mock for now
+  const catalogResponse = await fetch('/api/courses');
+  const catalog = await catalogResponse.json();
+  
+  const usersResponse = await fetch('/api/users');
+  const allUsers = await usersResponse.json();
+  const teachers = allUsers.filter((u: UserProfile) => u.role === 'Teacher');
+  
+  const roomsResponse = await fetch('/api/rooms');
+  const rooms = await roomsResponse.json();
 
   return allScheduled.map((sc: any) => {
     const courseDetail = catalog.find((c:any) => String(c.id) === String(sc.course_id));
@@ -412,12 +421,14 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
   // TODO: Migrate to GET /api/students/:studentId/registrations or /api/registrations?studentId=...
   await new Promise(resolve => setTimeout(resolve, 100));
   const studentRegs = mockDatabases.registrations.filter(reg => String(reg.student_id) === String(studentId));
-  const scheduledCourses = mockDatabases.scheduledCourses; // Use mock
-  const catalog = mockDatabases.courses; // Use mock
+  const scheduledCourses = mockDatabases.scheduledCourses; 
+  
+  const catalogResponse = await fetch('/api/courses'); // API Call
+  const catalog = await catalogResponse.json();
 
   return studentRegs.map(reg => {
     const sc = scheduledCourses.find(s => String(s.scheduled_course_id) === String(reg.scheduled_course_id));
-    const courseInfo = sc ? catalog.find(c => String(c.id) === String(sc.course_id)) : null;
+    const courseInfo = sc ? catalog.find((c:any) => String(c.id) === String(sc.course_id)) : null;
     return {
       registrationId: reg.registration_id,
       scheduledCourseId: reg.scheduled_course_id,
@@ -453,8 +464,6 @@ export async function fetchStudentAssessments(scheduledCourseId: string, student
 export async function fetchAcademicHistory(studentId: string | number) {
   console.log('Fetching academic history for student:', studentId);
   // TODO: Migrate to GET /api/students/:studentId/academic-history
-  // This is complex, involves joining Users, Students, Registrations, ScheduledCourses, Courses
-  // For now, returning the existing detailed mock structure.
   await new Promise(resolve => setTimeout(resolve, 100));
     const coursesSem1Year1 = [ { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 }, { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 }, ];
   const totalCreditsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.credits, 0);
@@ -485,8 +494,11 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
     console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
     // TODO: Migrate to /api/teachers/:teacherId/courses?semesterId=...
     await new Promise(resolve => setTimeout(resolve, 100));
-    const allScheduled = mockDatabases.scheduledCourses;
-    const courses = mockDatabases.courses;
+    const allScheduled = mockDatabases.scheduledCourses; // Keep mock for now
+    
+    const coursesResponse = await fetch('/api/courses'); // API call
+    const courses = await coursesResponse.json();
+
     return allScheduled
       .filter((sc: any) => String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true))
       .map((sc: any) => {
@@ -501,10 +513,13 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
     await new Promise(resolve => setTimeout(resolve, 100));
     const registrationsForCourse = mockDatabases.registrations.filter( reg => String(reg.scheduled_course_id) === String(scheduledCourseId) && reg.status === 'Registered' );
     const studentIds = registrationsForCourse.map(reg => reg.student_id);
-    const allAppUsers = await fetchAllUsers(); // This now calls API
+    
+    const allAppUsersResponse = await fetch('/api/users'); // API call
+    const allAppUsers = await allAppUsersResponse.json();
+
     const roster = allAppUsers
-      .filter(user => user.role === 'Student' && studentIds.includes(String(user.user_id)))
-      .map(studentUser => ({ student_id: String(studentUser.user_id), first_name: studentUser.first_name, last_name: studentUser.last_name, email: studentUser.email }));
+      .filter((user: UserProfile) => user.role === 'Student' && studentIds.includes(String(user.user_id)))
+      .map((studentUser: UserProfile) => ({ student_id: String(studentUser.user_id), first_name: studentUser.first_name, last_name: studentUser.last_name, email: studentUser.email }));
     return roster;
 }
 
@@ -523,9 +538,12 @@ export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseI
   // TODO: Migrate this complex query to an API route
   await new Promise(resolve => setTimeout(resolve, 100));
   const registrationsForCourse = mockDatabases.registrations.filter( reg => String(reg.scheduled_course_id) === String(scheduledCourseId) );
-  const allAppUsers = await fetchAllUsers(); // API call
+  
+  const allAppUsersResponse = await fetch('/api/users'); // API call
+  const allAppUsers = await allAppUsersResponse.json();
+
   return registrationsForCourse.map(reg => {
-    const studentInfo = allAppUsers.find(u => String(u.user_id) === String(reg.student_id));
+    const studentInfo = allAppUsers.find((u: UserProfile) => String(u.user_id) === String(reg.student_id));
     return {
       registration_id: reg.registration_id, student_id: reg.student_id,
       first_name: studentInfo?.first_name || 'Unknown', last_name: studentInfo?.last_name || 'Student',
