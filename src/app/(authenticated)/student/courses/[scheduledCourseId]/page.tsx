@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchStudentCourseMaterials, fetchStudentAssessments, fetchAvailableCourses } from '@/lib/api'; // Mock API
+import { fetchItems } from '@/lib/api'; // Using generic fetchItems
 import { askGeminiAboutCourse } from '@/ai/flows/ask-gemini-about-course';
 import { useToast } from '@/hooks/use-toast';
 import { Book, ClipboardList, Brain, Download, LinkIcon, Loader2, Send, User, Bot, AlertTriangle } from 'lucide-react';
@@ -24,17 +25,34 @@ interface CourseMaterial {
   url: string | null;
 }
 
-interface StudentAssessment {
-  assessment_id: string;
+interface Assessment { // This is the structure of items from /api/assessments
+  id: string;
+  scheduled_course_id: string;
   name: string;
+  description: string;
   max_score: number;
-  score: number | null;
-  feedback: string | null;
-  // due_date might be here
+  due_date: string;
+  type: string;
 }
 
-interface CourseDetails { // Assuming a structure for course details
-  id: string;
+interface StudentAssessmentEntry { // This is from /api/studentAssessments
+    student_assessment_id?: string;
+    registration_id: string;
+    assessment_id: string;
+    score: number | null;
+    feedback: string | null;
+    submission_timestamp?: string;
+    graded_at?: string;
+}
+
+interface DisplayableAssessment extends Assessment {
+    student_score: number | null;
+    student_feedback: string | null;
+}
+
+
+interface CourseDetails { // Assuming a structure for course details from GET /api/scheduledCourses/[id]
+  scheduled_course_id: string; // Renamed from 'id' for clarity
   course_code: string;
   title: string;
   description: string;
@@ -47,6 +65,13 @@ interface AiMessage {
   sender: 'user' | 'bot';
 }
 
+interface StudentRegistration {
+    registration_id: string;
+    student_id: string | number;
+    scheduled_course_id: string | number;
+    // ... other registration fields if needed
+}
+
 export default function StudentCourseViewPage() {
   const params = useParams();
   const scheduledCourseId = params.scheduledCourseId as string;
@@ -55,7 +80,7 @@ export default function StudentCourseViewPage() {
 
   const [courseDetails, setCourseDetails] = useState<CourseDetails | null>(null);
   const [materials, setMaterials] = useState<CourseMaterial[]>([]);
-  const [assessments, setAssessments] = useState<StudentAssessment[]>([]);
+  const [displayableAssessments, setDisplayableAssessments] = useState<DisplayableAssessment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [aiQuestion, setAiQuestion] = useState('');
@@ -66,25 +91,49 @@ export default function StudentCourseViewPage() {
 
   useEffect(() => {
     async function loadData() {
-      if (!scheduledCourseId || !user?.user_id) return;
+      if (!scheduledCourseId || !user?.user_id) {
+        setIsLoading(false); // Stop loading if essential IDs are missing
+        return;
+      }
       setIsLoading(true);
       try {
-        // Fetch full course details - using fetchAvailableCourses as a placeholder
-        const allCourses = await fetchAvailableCourses(); // This needs a proper API
-        const currentCourse = allCourses.find(c => c.id === scheduledCourseId);
-        if (currentCourse) {
-          setCourseDetails(currentCourse as CourseDetails);
+        // Fetch course details
+        const courseData = await fetchItems('scheduledCourses', scheduledCourseId) as CourseDetails;
+        if (courseData) {
+          setCourseDetails(courseData);
         } else {
            toast({title: "Error", description: "Course details not found.", variant: "destructive"});
         }
 
-        const [materialsData, assessmentsData] = await Promise.all([
-          fetchStudentCourseMaterials(scheduledCourseId),
-          fetchStudentAssessments(scheduledCourseId, user.user_id)
-        ]);
+        // Fetch materials
+        const materialsData = await fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`) as CourseMaterial[];
         setMaterials(materialsData);
-        setAssessments(assessmentsData);
+
+        // Fetch all assessments for the course
+        const courseAssessmentsData = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as Assessment[];
+
+        // Fetch student's registrations to find the relevant registration_id
+        const studentRegistrations = await fetchItems(`registrations?studentId=${user.user_id}`) as StudentRegistration[];
+        const currentRegistration = studentRegistrations.find(reg => String(reg.scheduled_course_id) === String(scheduledCourseId));
+
+        let studentScoresData: StudentAssessmentEntry[] = [];
+        if (currentRegistration) {
+            studentScoresData = await fetchItems(`studentAssessments?registrationId=${currentRegistration.registration_id}`) as StudentAssessmentEntry[];
+        }
+
+        // Combine assessments with student's scores
+        const combinedAssessments = courseAssessmentsData.map(assessment => {
+            const studentEntry = studentScoresData.find(entry => entry.assessment_id === assessment.id);
+            return {
+                ...assessment,
+                student_score: studentEntry?.score ?? null,
+                student_feedback: studentEntry?.feedback ?? null,
+            };
+        });
+        setDisplayableAssessments(combinedAssessments);
+
       } catch (error) {
+        console.error("Error loading course data:", error);
         toast({ title: "Error", description: "Failed to load course data.", variant: "destructive" });
       } finally {
         setIsLoading(false);
@@ -101,7 +150,6 @@ export default function StudentCourseViewPage() {
     setIsAiLoading(true);
 
     try {
-      // For simplicity, using selectedMaterialContext. In a real app, might combine multiple materials or summarize.
       const context = selectedMaterialContext || "General course information for " + (courseDetails?.title || "this course") + ". " + (courseDetails?.description || "");
       const response = await askGeminiAboutCourse({ questionText: userMessage.text, courseMaterialContextText: context });
       const botMessage: AiMessage = { id: (Date.now() + 1).toString(), text: response.answer, sender: 'bot' };
@@ -116,17 +164,16 @@ export default function StudentCourseViewPage() {
   };
 
   const selectMaterialForAiContext = (material: CourseMaterial) => {
-    // In a real app, you might fetch the content of the file. Here, we'll use its description.
     setSelectedMaterialContext(`Regarding the material titled "${material.title}": ${material.description}`);
     toast({title: "Context Set", description: `AI context set to material: ${material.title}`});
   }
 
   if (isLoading) {
     return (
-        <div className="space-y-4">
-            <Skeleton className="h-12 w-1/2" />
-            <Skeleton className="h-8 w-1/3" />
-            <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-4 p-4">
+            <Skeleton className="h-12 w-3/4 md:w-1/2" />
+            <Skeleton className="h-8 w-1/2 md:w-1/3 mb-4" />
+            <div className="grid grid-cols-3 gap-2 border-b pb-2 mb-2">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
@@ -137,7 +184,7 @@ export default function StudentCourseViewPage() {
   }
   
   if (!courseDetails) {
-    return <p>Course not found.</p>;
+    return <p className="p-4 text-destructive">Course details could not be loaded. You might not be enrolled or the course does not exist.</p>;
   }
 
   return (
@@ -189,23 +236,23 @@ export default function StudentCourseViewPage() {
           <Card>
             <CardHeader><CardTitle className="font-headline">Assessments</CardTitle></CardHeader>
             <CardContent>
-              {assessments.length > 0 ? (
+              {displayableAssessments.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Max Score</TableHead>
-                      <TableHead>Your Score</TableHead>
+                      <TableHead className="text-center">Max Score</TableHead>
+                      <TableHead className="text-center">Your Score</TableHead>
                       <TableHead>Feedback</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {assessments.map(asm => (
-                      <TableRow key={asm.assessment_id}>
+                    {displayableAssessments.map(asm => (
+                      <TableRow key={asm.id}>
                         <TableCell>{asm.name}</TableCell>
-                        <TableCell>{asm.max_score}</TableCell>
-                        <TableCell>{asm.score ?? <span className="italic text-muted-foreground">Not Graded</span>}</TableCell>
-                        <TableCell>{asm.feedback ?? <span className="italic text-muted-foreground">No Feedback</span>}</TableCell>
+                        <TableCell className="text-center">{asm.max_score}</TableCell>
+                        <TableCell className="text-center">{asm.student_score ?? <span className="italic text-muted-foreground">Not Graded</span>}</TableCell>
+                        <TableCell>{asm.student_feedback ?? <span className="italic text-muted-foreground">No Feedback</span>}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -256,3 +303,4 @@ export default function StudentCourseViewPage() {
     </div>
   );
 }
+

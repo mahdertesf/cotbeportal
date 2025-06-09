@@ -1,16 +1,35 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { scheduledCoursesStore } from '../data';
-// Import registrationsStore if cascade delete is needed for in-memory
-// import { registrationsStore } from '../../registrations/data'; 
+import { coursesStore } from '../../courses/data';
+import { semestersStore } from '../../semesters/data';
+import { usersStore } from '../../users/data';
+import { roomsStore } from '../../rooms/data';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
     const scheduledCourse = scheduledCoursesStore.find(sc => sc.scheduled_course_id === id);
+    
     if (scheduledCourse) {
-      // Optionally enrich here if needed for a single view, similar to GET all
-      return NextResponse.json(scheduledCourse);
+      const course = coursesStore.find(c => String(c.id) === String(scheduledCourse.course_id));
+      const semester = semestersStore.find(s => String(s.id) === String(scheduledCourse.semester_id));
+      const teacher = usersStore.find(u => String(u.user_id) === String(scheduledCourse.teacher_id) && u.role === 'Teacher');
+      const room = roomsStore.find(r => String(r.id) === String(scheduledCourse.room_id));
+      
+      const enrichedScheduledCourse = {
+        ...scheduledCourse,
+        course_code: course?.course_code,
+        title: course?.title,
+        credits: course?.credits,
+        description: course?.description,
+        prerequisites: [], // Placeholder
+        semester_name: semester?.name,
+        teacher_name: teacher ? `${teacher.first_name} ${teacher.last_name}` : 'N/A',
+        room_display_name: room ? `${room.room_number} (${room.building_name || 'N/A'})` : 'N/A',
+        schedule: `${scheduledCourse.days_of_week || ''} ${scheduledCourse.start_time || ''}-${scheduledCourse.end_time || ''}`.trim(),
+      };
+      return NextResponse.json(enrichedScheduledCourse);
     }
     return NextResponse.json({ message: 'Scheduled course not found' }, { status: 404 });
   } catch (error) {
@@ -56,34 +75,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-    const initialLength = scheduledCoursesStore.length;
-    // It's important to reassign the filtered array back to the original store variable
-    // if it's imported and mutated elsewhere (like in registrations API).
-    // For this simple mock, we'll assume direct mutation is okay if `data.ts` exports `let`.
-    let found = false;
-    const newStore = scheduledCoursesStore.filter(sc => {
-        if (sc.scheduled_course_id === id) {
-            found = true;
-            return false;
-        }
-        return true;
-    });
-
-    if (found) {
-      // Update the actual store if it's exported as `let`
-      // This direct reassignment won't work if it's a const import.
-      // A better pattern for mutable stores is to use functions to modify them.
-      // For now, this implies `scheduledCoursesStore` in `../data` is `let`.
-      // To ensure this works:
-      // 1. Make sure `scheduledCoursesStore` is `export let`.
-      // 2. Or, modify the array in place:
-      const indexToDelete = scheduledCoursesStore.findIndex(sc => sc.scheduled_course_id === id);
-      if (indexToDelete > -1) {
-          scheduledCoursesStore.splice(indexToDelete, 1);
-          // If registrationsStore was imported, you'd filter it here too
-          // registrationsStore = registrationsStore.filter(reg => reg.scheduled_course_id !== id);
-          return NextResponse.json({ success: true, message: 'Scheduled course deleted' });
-      }
+    
+    const indexToDelete = scheduledCoursesStore.findIndex(sc => sc.scheduled_course_id === id);
+    if (indexToDelete > -1) {
+        scheduledCoursesStore.splice(indexToDelete, 1);
+        // Note: In a real DB, ON DELETE CASCADE would handle related registrations.
+        // For in-memory, if registrationsStore was managed here, you'd filter it.
+        return NextResponse.json({ success: true, message: 'Scheduled course deleted' });
     }
     return NextResponse.json({ message: 'Scheduled course not found' }, { status: 404 });
   } catch (error) {

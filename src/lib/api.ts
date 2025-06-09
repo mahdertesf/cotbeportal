@@ -8,10 +8,10 @@ export async function handleLogin(username: string, password_hash: string, role:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password: password_hash, role }),
   });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({error: 'Login failed, server error'}));
-    return { success: false, error: errorData.error || 'Login failed', data: null };
-  }
+  // if (!response.ok) { // Error handling should be done by the caller
+  //   const errorData = await response.json().catch(() => ({error: 'Login failed, server error'}));
+  //   return { success: false, error: errorData.error || 'Login failed', data: null };
+  // }
   return response.json();
 }
 
@@ -52,7 +52,7 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
 
 // --- Profile Fetching (delegated to API routes) ---
 export async function fetchStudentProfile(userId: string | number): Promise<UserProfile> {
-  const response = await fetch(`/api/users/${userId}`); // Assumes /api/users/[id] can fetch any user
+  const response = await fetch(`/api/users/${userId}`); 
   if (!response.ok) throw new Error('Failed to fetch student profile');
   const user = await response.json();
   if (user.role !== 'Student') throw new Error('User is not a student');
@@ -92,45 +92,21 @@ export async function updateStaffProfile(userId: string | number, data: Partial<
 // --- Generic CRUD section ---
 // Mocks for entities NOT YET migrated to API routes
 export let mockDatabases: Record<string, any[]> = {
-  assessments: {}, // Will be keyed by `assessments?courseId=SC_ID`
-  announcements: [
-    { announcement_id: 'anno-1', title: 'Welcome Fall 2024!', content: 'Welcome to CoTBE!', author_id: 'staff1', target_audience: 'All Portal Users', status: 'Published', publish_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), department_id: null },
-    { announcement_id: 'anno-2', title: 'CS Dept Meeting', content: 'CS students meeting Sep 5th.', author_id: 'teacher-2', target_audience: 'Specific Department Students', status: 'Published', publish_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-1' },
-  ],
-  courseMaterials: [
-    { id: 'cm-1', scheduled_course_id: 'sc-fall24-cs101-a', title: 'CS101 Syllabus', description: 'Course outline', material_type: 'File', file_path: '/mock/cs101_syllabus.pdf', uploaded_by: 'teacher-2' },
-  ],
+  // assessments: {}, // Moved to API
+  // courseMaterials: [], // Moved to API
+  // studentAssessments: [], // Moved to API
   auditLogs: [
     { id: 'log1', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff1', action_type: 'USER_LOGIN', target_entity_type: 'USER', target_entity_id: 'staff1', ip_address: '192.168.1.10', details: 'User logged in successfully' },
   ],
+   announcements: [
+    { announcement_id: 'anno-1', title: 'Welcome Fall 2024!', content: 'Welcome to CoTBE!', author_id: 'staff1', target_audience: 'All Portal Users', status: 'Published', publish_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), department_id: null },
+    { announcement_id: 'anno-2', title: 'CS Dept Meeting', content: 'CS students meeting Sep 5th.', author_id: 'teacher-2', target_audience: 'Specific Department Students', status: 'Published', publish_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), department_id: 'dept-1' },
+  ],
 };
 
-// Initialize mock assessments dynamically
-// This needs to fetch scheduledCourses from API now
-async function initializeMockAssessments() {
-    try {
-        const response = await fetch('/api/scheduledCourses');
-        if(!response.ok) return;
-        const scheduledCoursesFromApi = await response.json();
 
-        scheduledCoursesFromApi.forEach((sc: any) => {
-            const courseIdKey = `assessments?courseId=${sc.scheduled_course_id}`;
-            if (!mockDatabases.assessments[courseIdKey]) {
-                mockDatabases.assessments[courseIdKey] = [
-                    { id: `asm-${sc.scheduled_course_id}-1`, scheduledCourseId: sc.scheduled_course_id, name: `Quiz 1 (${sc.course_code || sc.course_id})`, description: 'Covers week 1-3 materials.', max_score: 20, due_date: '2024-09-15T23:59:00Z', type: 'Quiz' },
-                    { id: `asm-${sc.scheduled_course_id}-2`, scheduledCourseId: sc.scheduled_course_id, name: `Midterm Exam (${sc.course_code || sc.course_id})`, description: 'Comprehensive Midterm Examination.', max_score: 30, due_date: '2024-10-15T23:59:00Z', type: 'Exam' },
-                ];
-            }
-        });
-    } catch (error) {
-        console.error("Failed to initialize mock assessments:", error);
-    }
-}
-initializeMockAssessments();
-
-
-export async function fetchItems(entity: string, filters?: any) {
-  console.log(`Fetching ${entity} with filters:`, filters);
+export async function fetchItems(entityOrQuery: string, id?: string | number, filters?: any) {
+  console.log(`Fetching ${entityOrQuery}${id ? `/${id}` : ''} with filters:`, filters);
   
   const entityToApiMap: Record<string, string> = {
     'users': '/api/users',
@@ -141,35 +117,51 @@ export async function fetchItems(entity: string, filters?: any) {
     'rooms': '/api/rooms',
     'scheduledCourses': '/api/scheduledCourses',
     'registrations': '/api/registrations', 
+    'assessments': '/api/assessments',
+    'courseMaterials': '/api/courseMaterials',
+    'studentAssessments': '/api/studentAssessments',
   };
   
-  let apiUrl = entityToApiMap[entity];
+  let entityName = entityOrQuery;
+  let queryParamsString = '';
+
+  if (entityOrQuery.includes('?')) {
+    const [path, query] = entityOrQuery.split('?');
+    entityName = path;
+    queryParamsString = query;
+  }
+
+
+  let apiUrl = entityToApiMap[entityName];
 
   if (apiUrl) {
-    if (filters && Object.keys(filters).length > 0) {
-        const queryParams = new URLSearchParams(filters as any).toString();
-        apiUrl = `${apiUrl}?${queryParams}`;
+    if (id) {
+        apiUrl = `${apiUrl}/${id}`;
     }
+    if (filters && Object.keys(filters).length > 0) {
+        const queryParams = new URLSearchParams(filters as any);
+        apiUrl = `${apiUrl}?${queryParams.toString()}`;
+    } else if (queryParamsString) {
+         apiUrl = `${apiUrl}?${queryParamsString}`;
+    }
+
     const response = await fetch(apiUrl);
-    if (!response.ok) throw new Error(`Failed to fetch ${entity} from API at ${apiUrl}`);
+    if (!response.ok) throw new Error(`Failed to fetch ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}`);
     return response.json();
   }
   
   // Fallback to mockDatabases for entities NOT YET migrated
-  if (mockDatabases[entity]) {
-    return JSON.parse(JSON.stringify(mockDatabases[entity]));
+  if (mockDatabases[entityOrQuery]) {
+    return JSON.parse(JSON.stringify(mockDatabases[entityOrQuery]));
   }
-  if (entity === 'teachers') { // This can also use the /api/users?role=Teacher
+   if (entityOrQuery === 'teachers') { // This can also use the /api/users?role=Teacher
     const response = await fetch('/api/users?role=Teacher');
     if (!response.ok) throw new Error('Failed to fetch teachers');
     const allUsers = await response.json();
     return allUsers.filter((user: UserProfile) => user.role === 'Teacher')
                    .map((user: UserProfile) => ({ user_id: user.user_id, first_name: user.first_name, last_name: user.last_name, department_id: user.department_id }));
   }
-  if (entity.startsWith('assessments?courseId=')) { 
-    return JSON.parse(JSON.stringify(mockDatabases.assessments[entity] || []));
-  }
-  console.warn(`fetchItems: Entity "${entity}" not found in API routes or mockDatabases.`);
+  console.warn(`fetchItems: Entity or Query "${entityOrQuery}" not found in API routes or mockDatabases.`);
   return [];
 }
 
@@ -186,6 +178,9 @@ export async function createItem(entity: string, data: any) {
     'rooms': '/api/rooms',
     'scheduledCourses': '/api/scheduledCourses',
     'registrations': '/api/registrations',
+    'assessments': '/api/assessments',
+    'courseMaterials': '/api/courseMaterials',
+    'studentAssessments': '/api/studentAssessments',
   };
 
   if (entityToApiMap[entity]) {
@@ -194,14 +189,13 @@ export async function createItem(entity: string, data: any) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    // No need to check for response.ok here, as the calling function will handle it
     return response.json();
   }
   
   // Fallback to direct mock manipulation for entities NOT YET migrated
   await new Promise(resolve => setTimeout(resolve, 100)); 
   let newItem = { ...data };
-  const idKey = entity === 'announcements' ? 'announcement_id' : 'id'; // Adjusted for other entities
+  const idKey = entity === 'announcements' ? 'announcement_id' : 'id';
   
   if (!data[idKey] && idKey === 'id') { 
      newItem.id = `${entity.slice(0,4)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -209,20 +203,14 @@ export async function createItem(entity: string, data: any) {
   
   if (entity === 'announcements') {
      newItem.announcement_id = `anno-${Date.now()}`;
-     newItem.status = 'Draft'; // Default status for announcements
+     newItem.status = 'Draft'; 
      newItem.created_at = new Date().toISOString();
      newItem.updated_at = new Date().toISOString();
-  } else if (entity === 'courseMaterials') {
-    newItem.id = `cm-${Date.now()}`; // Assuming 'id' for courseMaterials from now on
   }
 
 
   if (mockDatabases[entity]) {
     mockDatabases[entity].push(newItem);
-  } else if (entity.startsWith('assessments?courseId=')) {
-      if (!mockDatabases.assessments[entity]) mockDatabases.assessments[entity] = [];
-      newItem.id = `asm-${entity.split('=')[1]}-${Date.now()}`; 
-      mockDatabases.assessments[entity].push(newItem);
   } else {
     console.warn(`createItem: Entity "${entity}" not explicitly handled for mock DB, using generic push.`);
     if (!mockDatabases[entity]) mockDatabases[entity] = [];
@@ -243,6 +231,9 @@ export async function updateItem(entity: string, id: string | number, data: any)
     'rooms': `/api/rooms/${id}`,
     'scheduledCourses': `/api/scheduledCourses/${id}`,
     'registrations': `/api/registrations/${id}`,
+    'assessments': `/api/assessments/${id}`,
+    'courseMaterials': `/api/courseMaterials/${id}`,
+    // StudentAssessments are usually created/updated via POST due to composite key nature or upsert logic
   };
 
   if (entityToApiMap[entity]) {
@@ -251,7 +242,6 @@ export async function updateItem(entity: string, id: string | number, data: any)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    // No need to check response.ok here, the calling function will handle it.
     return response.json();
   }
 
@@ -259,7 +249,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
   await new Promise(resolve => setTimeout(resolve, 100));
   let itemUpdated = false;
   let updatedItemData = null;
-  const idKey = entity === 'announcements' ? 'announcement_id' : 'id'; // Adjusted
+  const idKey = entity === 'announcements' ? 'announcement_id' : 'id'; 
 
   if (mockDatabases[entity]) {
     const index = mockDatabases[entity].findIndex((item: any) => String(item[idKey]) === String(id));
@@ -268,16 +258,7 @@ export async function updateItem(entity: string, id: string | number, data: any)
       updatedItemData = mockDatabases[entity][index];
       itemUpdated = true;
     }
-  } else if (entity.startsWith('assessments?courseId=')) {
-      if (mockDatabases.assessments[entity]) {
-          const index = mockDatabases.assessments[entity].findIndex((item: any) => String(item.id) === String(id));
-           if (index !== -1) {
-             mockDatabases.assessments[entity][index] = { ...mockDatabases.assessments[entity][index], ...data };
-             updatedItemData = mockDatabases.assessments[entity][index];
-             itemUpdated = true;
-           }
-      }
-  }
+  } 
   if (!itemUpdated) return { success: false, error: "Item not found", data: null };
   return { success: true, data: updatedItemData, error: null};
 }
@@ -294,28 +275,24 @@ export async function deleteItem(entity: string, id: string | number) {
     'rooms': `/api/rooms/${id}`,
     'scheduledCourses': `/api/scheduledCourses/${id}`,
     'registrations': `/api/registrations/${id}`,
+    'assessments': `/api/assessments/${id}`,
+    'courseMaterials': `/api/courseMaterials/${id}`,
+    // StudentAssessments might need specific delete logic or be handled by cascade if in DB
   };
 
   if (entityToApiMap[entity]) {
     const response = await fetch(entityToApiMap[entity], { method: 'DELETE' });
-    // No need to check response.ok here, the calling function will handle it.
     return response.json();
   }
 
   // Fallback to direct mock manipulation
   await new Promise(resolve => setTimeout(resolve, 100));
-  const idKey = entity === 'announcements' ? 'announcement_id' : 'id'; // Adjusted
+  const idKey = entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const initialLength = mockDatabases[entity].length;
     mockDatabases[entity] = mockDatabases[entity].filter((item: any) => String(item[idKey]) !== String(id));
     if (mockDatabases[entity].length < initialLength) return { success: true };
-  } else if (entity.startsWith('assessments?courseId=')) {
-      if (mockDatabases.assessments[entity]) {
-          const initialLength = mockDatabases.assessments[entity].length;
-          mockDatabases.assessments[entity] = mockDatabases.assessments[entity].filter((item: any) => String(item.id) !== String(id));
-          if (mockDatabases.assessments[entity].length < initialLength) return { success: true };
-      }
   }
   return { success: false, error: "Item not found" };
 }
@@ -324,17 +301,12 @@ export async function deleteItem(entity: string, id: string | number) {
 
 export async function fetchAvailableCourses(filters?: any) {
   console.log('Fetching available courses with filters:', filters);
-  // This now primarily relies on the enriched data from GET /api/scheduledCourses
-  // Filters would ideally be passed to the API: /api/scheduledCourses?semesterId=...&departmentId=...
-  // For now, client-side filtering might still happen based on the full enriched list if no API filters are implemented.
   
-  // Construct query parameters if filters are provided
   let queryString = '';
   if (filters) {
     const params = new URLSearchParams();
     if (filters.semesterId) params.append('semesterId', filters.semesterId);
     if (filters.departmentId) params.append('departmentId', filters.departmentId);
-    // Add more filters as needed
     queryString = params.toString();
   }
 
@@ -345,28 +317,24 @@ export async function fetchAvailableCourses(filters?: any) {
   }
   const scheduledCoursesFromApi = await response.json();
 
-  // The API response for scheduledCourses is already enriched with:
-  // course_code, title, credits, description, prerequisites (placeholder),
-  // semester_name, teacher_name, room_name, schedule (constructed string)
-  // So, we can directly return this, mapping to the expected 'Course' interface for CourseRegistrationPage
   return scheduledCoursesFromApi.map((sc: any) => ({
-      id: sc.scheduled_course_id, // This is the key for registration
+      id: sc.scheduled_course_id, 
       course_code: sc.course_code,
       title: sc.title,
       credits: sc.credits,
       section_number: sc.section_number,
       teacher_name: sc.teacher_name,
-      room_name: sc.room_name, // Use room_name convention
-      schedule: sc.schedule, // Use constructed schedule string
+      room_name: sc.room_display_name, 
+      schedule: sc.schedule, 
       max_capacity: sc.max_capacity,
       current_enrollment: sc.current_enrollment,
       description: sc.description,
-      prerequisites: sc.prerequisites || [], // Ensure prerequisites array exists
+      prerequisites: sc.prerequisites || [], 
   }));
 }
 
 
-export async function handleRegisterCourse(scheduledCourseId: string, studentId: string | number) { // Added studentId
+export async function handleRegisterCourse(scheduledCourseId: string, studentId: string | number) { 
   console.log(`Registering student ${studentId} for course:`, scheduledCourseId);
   const response = await fetch('/api/registrations', {
       method: 'POST',
@@ -378,14 +346,11 @@ export async function handleRegisterCourse(scheduledCourseId: string, studentId:
 
 export async function handleDropCourse(registrationId: string) {
   console.log('Dropping course registration:', registrationId);
-  // Using PUT to update status to 'Dropped'
   const response = await fetch(`/api/registrations/${registrationId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'Dropped' }),
   });
-  // If you prefer full deletion:
-  // const response = await fetch(`/api/registrations/${registrationId}`, { method: 'DELETE' });
   return response.json();
 }
 
@@ -394,7 +359,6 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
   const response = await fetch(`/api/registrations?studentId=${studentId}`);
   if (!response.ok) throw new Error('Failed to fetch student registered courses');
   const registrations = await response.json();
-  // API already enriches with course_code and title. Map to expected structure if necessary.
   return registrations.map((reg: any) => ({
       registrationId: reg.registration_id,
       scheduledCourseId: reg.scheduled_course_id,
@@ -408,33 +372,42 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
 
 export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
   console.log('Fetching course materials for:', scheduledCourseId);
-  // TODO: Migrate to GET /api/courseMaterials?scheduledCourseId=...
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return mockDatabases.courseMaterials?.filter((m: any) => String(m.scheduled_course_id) === String(scheduledCourseId)) || [];
+  return fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`);
 }
 
 export async function fetchStudentAssessments(scheduledCourseId: string, studentId: string | number) {
-    console.log('Fetching assessments for student:', studentId, 'in course:', scheduledCourseId);
-    // TODO: Migrate. For now, uses mock. This requires fetching assessments for the course
-    // and then fetching student-specific scores/submissions for those assessments.
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const courseAssessmentsKey = `assessments?courseId=${scheduledCourseId}`;
-    const courseAssessments = mockDatabases.assessments[courseAssessmentsKey] || [];
-    // In a real scenario, you'd also fetch from a 'StudentAssessments' table/API endpoint
-    // linking students to assessment scores and feedback.
-    return courseAssessments.map((asm: any) => ({
-        assessment_id: asm.id, name: asm.name, max_score: asm.max_score,
-        // Mock scores for demo
-        score: Math.random() > 0.5 ? Math.floor(Math.random() * asm.max_score) : null,
-        feedback: Math.random() > 0.5 ? 'Mock feedback.' : null,
-    }));
+    console.log('Fetching assessments and scores for student:', studentId, 'in course:', scheduledCourseId);
+    
+    const courseAssessments = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as any[];
+    
+    const studentRegistrations = await fetchItems(`registrations?studentId=${studentId}`) as any[];
+    const currentRegistration = studentRegistrations.find(reg => String(reg.scheduled_course_id) === String(scheduledCourseId));
+
+    let studentScores: any[] = [];
+    if (currentRegistration) {
+        studentScores = await fetchItems(`studentAssessments?registrationId=${currentRegistration.registration_id}`) as any[];
+    }
+    
+    return courseAssessments.map(asm => {
+        const scoreEntry = studentScores.find(sc => String(sc.assessment_id) === String(asm.id));
+        return {
+            assessment_id: asm.id, // ensure this matches the DisplayableAssessment interface
+            name: asm.name,
+            max_score: asm.max_score,
+            due_date: asm.due_date, // Include other fields from Assessment type
+            type: asm.type,
+            description: asm.description,
+            scheduled_course_id: asm.scheduled_course_id,
+            student_score: scoreEntry?.score ?? null,
+            student_feedback: scoreEntry?.feedback ?? null,
+        };
+    });
 }
 
 export async function fetchAcademicHistory(studentId: string | number) {
   console.log('Fetching academic history for student:', studentId);
-  // TODO: Migrate to GET /api/students/:studentId/academic-history
-  // This is a complex query involving multiple tables (registrations, scheduledCourses, courses, semesters).
-  // For mock, keeping the existing detailed structure.
+  // This remains a complex mock as it requires significant data joining.
+  // In a real app, this would be a dedicated API endpoint.
   await new Promise(resolve => setTimeout(resolve, 100));
     const coursesSem1Year1 = [ { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 }, { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 }, ];
   const totalCreditsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.credits, 0);
@@ -463,9 +436,7 @@ export async function fetchAcademicHistory(studentId: string | number) {
 
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
     console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
-    let apiUrl = `/api/scheduledCourses`; // Fetches all, then filters client-side for now
-    // Ideal: `/api/scheduledCourses?teacherId=${teacherId}&semesterId=${semesterId}`
-    // This requires the API to support these filters.
+    let apiUrl = `/api/scheduledCourses`; 
     
     const response = await fetch(apiUrl);
     if (!response.ok) throw new Error('Failed to fetch teacher assigned courses');
@@ -477,7 +448,11 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
           scheduled_course_id: sc.scheduled_course_id, 
           course_code: sc.course_code || 'N/A', 
           title: sc.title || 'N/A', 
-          section: sc.section_number 
+          section: sc.section_number,
+          // Include other enriched details if the manage page needs them directly
+          teacher_name: sc.teacher_name,
+          semester_name: sc.semester_name,
+          room_display_name: sc.room_display_name,
       }));
 }
 
@@ -486,7 +461,6 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
     const response = await fetch(`/api/registrations?scheduledCourseId=${scheduledCourseId}`);
     if (!response.ok) throw new Error(`Failed to fetch student roster for course ${scheduledCourseId}`);
     const registrations = await response.json();
-    // API for registrations with scheduledCourseId now enriches with student names/email
     return registrations.map((reg: any) => ({
         student_id: reg.student_id,
         first_name: reg.first_name,
@@ -497,60 +471,28 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
 
 export async function createCourseMaterial(scheduledCourseId: string, materialData: any) {
     console.log('Creating course material for course:', scheduledCourseId, 'data:', materialData);
-    // TODO: Migrate to POST /api/courseMaterials
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const newMaterial = { 
-        id: `cm-${Date.now()}`, // Use 'id' for consistency
-        scheduled_course_id: scheduledCourseId, 
-        uploaded_by: 'teacher-1', // Placeholder
-        ...materialData 
-    };
-    if (!mockDatabases.courseMaterials) mockDatabases.courseMaterials = [];
-    mockDatabases.courseMaterials.push(newMaterial);
-    return { success: true, data: newMaterial };
+    return createItem('courseMaterials', { ...materialData, scheduled_course_id: scheduledCourseId });
 }
 
-export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; first_name: string; last_name: string; email: string; current_final_grade: string | null; current_grade_points: number | null;}>> {
+export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; first_name: string; last_name: string; email: string; final_grade: string | null; grade_points: number | null;}>> {
   console.log('Fetching student registrations for grading, course:', scheduledCourseId);
   const response = await fetch(`/api/registrations?scheduledCourseId=${scheduledCourseId}`);
   if (!response.ok) throw new Error('Failed to fetch registrations for grading');
-  // The API response for registrations with scheduledCourseIdParam already includes student details
-  // and final grade info (current_final_grade, current_grade_points).
   return response.json(); 
 }
 
 export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId: string): Promise<Record<string, Record<string, { score: number | null; feedback: string | null }>>> {
   console.log('Fetching all student assessment scores for course:', scheduledCourseId);
-  // TODO: Migrate this to an API. This is a complex data shape to mock simply.
-  // GET /api/studentAssessments?scheduledCourseId=X (would return all entries)
-  // Then process into the nested structure.
-  await new Promise(resolve => setTimeout(resolve, 100));
-  const mockScores: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
+  const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as StudentAssessmentEntry[];
   
-  // Fetch assessments for the course (still from mock, but could be API)
-  const courseAssessmentsKey = `assessments?courseId=${scheduledCourseId}`;
-  const courseAssessments = mockDatabases.assessments[courseAssessmentsKey] || [];
-  
-  // Fetch registrations for the course (now from API)
-  const registrationsResponse = await fetch(`/api/registrations?scheduledCourseId=${scheduledCourseId}`);
-  if (!registrationsResponse.ok) {
-      console.error("Failed to fetch registrations for assessment scores");
-      return mockScores;
-  }
-  const registrations = await registrationsResponse.json();
-
-  registrations.forEach((reg: any) => { // reg should have student_id
-      mockScores[reg.student_id] = {};
-      courseAssessments.forEach((asm: any) => {
-        const maxScore = typeof asm.max_score === 'number' ? asm.max_score : 0;
-        // Simulate scores if not already present from a more complex mock of StudentAssessments table
-        mockScores[reg.student_id][asm.id] = {
-            score: Math.random() > 0.2 ? Math.floor(Math.random() * maxScore * 0.7 + maxScore * 0.3) : null, // 80% chance of having a score
-            feedback: Math.random() > 0.5 ? "This is mock feedback." : null
-        };
-      });
-    });
-  return mockScores;
+  const scoresMap: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
+  studentEntries.forEach(entry => {
+      if (!scoresMap[entry.student_id]) {
+          scoresMap[entry.student_id] = {};
+      }
+      scoresMap[entry.student_id][entry.assessment_id] = { score: entry.score, feedback: entry.feedback };
+  });
+  return scoresMap;
 }
 
 export async function fetchAuditLogs(filters?: any) {
@@ -593,4 +535,11 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
   });
   relevantAnnouncements.sort((a, b) => new Date(b.publish_date).getTime() - new Date(a.publish_date).getTime());
   return relevantAnnouncements;
+}
+
+// Specific function for Teacher's Gradebook component to save/update student assessment scores
+// This will call POST to /api/studentAssessments, which handles upsert.
+export async function saveStudentAssessmentEntry(entry: { registration_id: string; assessment_id: string; score: number | null; feedback: string | null; student_id: string; }) {
+    console.log('Saving student assessment entry:', entry);
+    return createItem('studentAssessments', entry); // createItem for 'studentAssessments' maps to POST /api/studentAssessments
 }

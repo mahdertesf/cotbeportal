@@ -14,17 +14,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from '@/hooks/use-toast';
 import { 
-  fetchTeacherAssignedCourses, 
+  fetchItems, // Use generic fetchItems
+  createItem, 
+  updateItem, 
+  deleteItem,
   fetchStudentRoster, 
-  createCourseMaterial, 
-  fetchStudentCourseMaterials as fetchMaterials, 
-  fetchItems as fetchAssessmentsForCourse, 
-  createItem as createAssessment, 
-  updateItem as updateAssessment, 
-  deleteItem as deleteAssessment,
-  fetchStudentRegistrationsForCourseGrading, // New: Fetches student list with reg IDs and existing final grades
-  fetchAllStudentAssessmentScoresForCourse, // New: Fetches all raw scores for all students
-  updateItem // Ensure updateItem is imported for saving final grades
 } from '@/lib/api'; 
 import { getGeminiAssessmentIdeas, getGeminiFeedbackSuggestions } from '@/ai/flows';
 import { Users, BookOpen, ClipboardEdit, Percent, CheckSquare, Loader2, PlusCircle, Edit, Trash2, Upload, LinkIcon, Brain, Send, Bot, User, FileText, AlertTriangle, Eye, Save } from 'lucide-react';
@@ -32,10 +26,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 // Types
 interface Student { student_id: string; first_name: string; last_name: string; email: string; } // From roster
-interface CourseMaterial { id: string; title: string; description: string; material_type: 'File' | 'Link'; file_path?: string | null; url?: string | null; }
+interface CourseMaterial { id: string; title: string; description: string; material_type: 'File' | 'Link'; file_path?: string | null; url?: string | null; scheduled_course_id?: string;}
 interface Assessment { id: string; name: string; description: string; max_score: number; due_date: string; type: string; scheduledCourseId?: string; } // scheduledCourseId added for consistency
-interface StudentAssessmentEntry { student_id: string; assessment_id: string; score: number | null; feedback: string | null; }
-interface ScheduledCourseDetails { scheduled_course_id: string; course_code: string; title: string; section: string;}
+interface StudentAssessmentEntry { student_assessment_id?: string; student_id: string; assessment_id: string; registration_id: string; score: number | null; feedback: string | null; }
+interface ScheduledCourseDetails { 
+    scheduled_course_id: string; 
+    course_code: string; 
+    title: string; 
+    section: string; // section_number from API
+    // Add other enriched fields if needed, e.g., teacher_name, semester_name
+    teacher_name?: string;
+    semester_name?: string;
+    room_display_name?: string;
+    schedule?: string;
+}
 
 interface StudentFinalGradeEntry {
   registration_id: string;
@@ -64,8 +68,8 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
     const loadMaterials = async () => {
       setIsLoading(true);
       try {
-        const data = await fetchMaterials(scheduledCourseId); 
-        setMaterials(data);
+        const data = await fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`); 
+        setMaterials(data as CourseMaterial[]);
       } catch (e) { toast({ title: "Error loading materials", variant: "destructive"}); }
       setIsLoading(false);
     }
@@ -78,7 +82,13 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
 
   const handleSubmitMaterial = async () => {
     try {
-      const created = await createCourseMaterial(scheduledCourseId, {...newMaterial, id: Date.now().toString()}); 
+      // Mock file upload: In a real app, upload `file` to storage and get URL for `file_path`
+      const materialPayload = {
+        ...newMaterial,
+        scheduled_course_id: scheduledCourseId,
+        file_path: file ? `/uploads/mock/${file.name}` : newMaterial.file_path, // Mock path
+      };
+      const created = await createItem('courseMaterials', materialPayload); 
       setMaterials(prev => [...prev, created.data as CourseMaterial]);
       setShowForm(false);
       setNewMaterial({ title: '', description: '', material_type: 'File' });
@@ -92,7 +102,9 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
   return (
-    <div className="space-y-4">
+    <Card>
+      <CardHeader><CardTitle>Course Materials</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
       <Button onClick={() => setShowForm(!showForm)}><PlusCircle className="mr-2 h-4 w-4"/>Add Material</Button>
       {showForm && (
         <Card className="p-4 space-y-3">
@@ -109,15 +121,21 @@ const CourseMaterialsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string 
       <ul className="space-y-2">
         {materials.map(m => (
           <li key={m.id} className="p-3 border rounded flex justify-between items-center">
-            <span>{m.title} ({m.material_type})</span>
+            <div>
+                <p className="font-semibold">{m.title} ({m.material_type})</p>
+                <p className="text-xs text-muted-foreground">{m.description}</p>
+            </div>
             <div className="space-x-1">
+              {/* Edit/Delete buttons can be implemented similarly if needed */}
               <Button variant="ghost" size="sm"><Edit className="h-4 w-4"/></Button>
               <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
             </div>
           </li>
         ))}
+        {materials.length === 0 && <p className="text-muted-foreground">No materials added yet.</p>}
       </ul>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -132,27 +150,28 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
   const [aiTopic, setAiTopic] = useState('');
   const { toast } = useToast();
 
-  useEffect(() => {
-    const loadData = async () => {
+  const loadData = useCallback(async () => {
       setIsLoading(true);
       try {
-        const data = await fetchAssessmentsForCourse(`assessments?courseId=${scheduledCourseId}`);
+        const data = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`);
         setAssessments(data as Assessment[]);
       } catch(e) { toast({title: "Error loading assessments", variant: "destructive"});}
       setIsLoading(false);
-    }
+    }, [scheduledCourseId, toast]);
+
+  useEffect(() => {
     loadData();
-  }, [scheduledCourseId, toast]);
+  }, [loadData]);
   
   const handleSaveAssessment = async () => {
     try {
+      const payload = {...currentAssessment, scheduledCourseId: scheduledCourseId};
       if(currentAssessment.id) {
-        await updateAssessment('assessments', currentAssessment.id, {...currentAssessment, scheduledCourseId});
+        await updateItem('assessments', currentAssessment.id, payload);
       } else {
-        await createAssessment('assessments', {...currentAssessment, id: Date.now().toString(), scheduledCourseId }); 
+        await createItem('assessments', payload); 
       }
-      const data = await fetchAssessmentsForCourse(`assessments?courseId=${scheduledCourseId}`);
-      setAssessments(data as Assessment[]);
+      loadData(); // Reload assessments
       setShowForm(false);
       setCurrentAssessment({});
       toast({title: "Assessment saved"});
@@ -172,14 +191,16 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
   if (isLoading) return <Skeleton className="h-60 w-full" />;
 
   return (
-    <div className="space-y-4">
+    <Card>
+        <CardHeader><CardTitle>Assessments</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
       <Button onClick={() => { setShowForm(true); setCurrentAssessment({}); setAiIdeas(''); setAiTopic(''); }}><PlusCircle className="mr-2 h-4 w-4"/>Create Assessment</Button>
       {showForm && (
         <Card className="p-4 space-y-3">
           <Input placeholder="Name" value={currentAssessment.name || ''} onChange={e => setCurrentAssessment({...currentAssessment, name: e.target.value})} />
           <Textarea placeholder="Description" value={currentAssessment.description || ''} onChange={e => setCurrentAssessment({...currentAssessment, description: e.target.value})} />
           <Input type="number" placeholder="Max Score" value={currentAssessment.max_score || ''} onChange={e => setCurrentAssessment({...currentAssessment, max_score: parseInt(e.target.value)})} />
-          <Input type="date" placeholder="Due Date" value={currentAssessment.due_date || ''} onChange={e => setCurrentAssessment({...currentAssessment, due_date: e.target.value})} />
+          <Input type="datetime-local" placeholder="Due Date" value={currentAssessment.due_date || ''} onChange={e => setCurrentAssessment({...currentAssessment, due_date: e.target.value})} />
           <Input placeholder="Type (e.g., Quiz, Exam)" value={currentAssessment.type || ''} onChange={e => setCurrentAssessment({...currentAssessment, type: e.target.value})} />
           <Button onClick={handleSaveAssessment}>Save Assessment</Button>
           
@@ -197,51 +218,68 @@ const AssessmentsCRUD = ({ scheduledCourseId }: { scheduledCourseId: string }) =
       <ul className="space-y-2">
         {assessments.map(a => (
           <li key={a.id} className="p-3 border rounded flex justify-between items-center">
-            <span>{a.name} (Max: {a.max_score}) - Due: {new Date(a.due_date).toLocaleDateString()}</span>
+            <span>{a.name} (Max: {a.max_score}) - Due: {new Date(a.due_date).toLocaleString()}</span>
             <div className="space-x-1">
               <Button variant="ghost" size="sm" onClick={() => { setCurrentAssessment(a); setShowForm(true); }}><Edit className="h-4 w-4"/></Button>
-              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async () => { await deleteItem('assessments', a.id); loadData(); toast({title: "Assessment deleted"});}}><Trash2 className="h-4 w-4"/></Button>
             </div>
           </li>
         ))}
+         {assessments.length === 0 && <p className="text-muted-foreground">No assessments created yet.</p>}
       </ul>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
 // Gradebook Component
 const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string, students: Student[] }) => {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [grades, setGrades] = useState<Record<string, Record<string, StudentAssessmentEntry>>>({}); 
+  const [grades, setGrades] = useState<Record<string, StudentAssessmentEntry>>({}); // Key: "studentId_assessmentId"
   const [isLoading, setIsLoading] = useState(true);
   const [currentSubmissionText, setCurrentSubmissionText] = useState(''); 
   const [aiFeedback, setAiFeedback] = useState('');
   const [isAiFeedbackLoading, setIsAiFeedbackLoading] = useState(false);
+  const [registrations, setRegistrations] = useState<Array<{registration_id: string, student_id: string}>>([]);
   const {toast} = useToast();
 
-  useEffect(() => {
-    const loadData = async () => {
-        setIsLoading(true);
-        try {
-            const assessmentData = await fetchAssessmentsForCourse(`assessments?courseId=${scheduledCourseId}`);
-            setAssessments(assessmentData as Assessment[]);
-            // TODO: Fetch existing grades for all students and assessments from student_assessment_entries. Initialize `grades` state.
-            // For now, mock API `fetchAllStudentAssessmentScoresForCourse` handles this pattern for FinalGrades component
-        } catch (e) { toast({title: "Error loading gradebook data", variant: "destructive"});}
-        setIsLoading(false);
-    }
-    loadData();
+  const loadGradebookData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const assessmentData = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as Assessment[];
+        setAssessments(assessmentData);
+
+        const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as StudentAssessmentEntry[];
+        const gradesMap: Record<string, StudentAssessmentEntry> = {};
+        studentEntries.forEach(entry => {
+            gradesMap[`${entry.student_id}_${entry.assessment_id}`] = entry;
+        });
+        setGrades(gradesMap);
+        
+        const studentRegs = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`) as Array<{registration_id: string, student_id: string}>;
+        setRegistrations(studentRegs.map(r => ({ registration_id: r.registration_id, student_id: r.student_id })));
+
+    } catch (e) { toast({title: "Error loading gradebook data", variant: "destructive"});}
+    setIsLoading(false);
   }, [scheduledCourseId, toast]);
 
+  useEffect(() => {
+    loadGradebookData();
+  }, [loadGradebookData]);
+
   const handleGradeChange = (studentId: string, assessmentId: string, field: 'score' | 'feedback', value: string | number) => {
+    const key = `${studentId}_${assessmentId}`;
+    const reg = registrations.find(r => r.student_id === studentId);
+    if (!reg) {
+        toast({title: "Error", description: "Student registration not found for grading.", variant: "destructive"});
+        return;
+    }
+
     setGrades(prev => ({
       ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        [assessmentId]: {
-          ...(prev[studentId]?.[assessmentId] || { student_id: studentId, assessment_id: assessmentId, score: null, feedback: null }),
-          [field]: field === 'score' ? (value === '' ? null : Number(value)) : value,
-        }
+      [key]: {
+        ...(prev[key] || { student_id: studentId, assessment_id: assessmentId, registration_id: reg.registration_id, score: null, feedback: null }),
+        [field]: field === 'score' ? (value === '' || value === null ? null : Number(value)) : value,
       }
     }));
   };
@@ -257,34 +295,52 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
   };
   
   const handleSaveGrades = async () => {
-    toast({ title: "Mock Save", description: "Gradebook save functionality is conceptual for this mock." });
-    // In a real app: iterate `grades` state and call API to save each student_assessment_entry
-    // For example: await updateItem('student_assessment_entries', entry.id, { score, feedback }) or a batch update.
+    setIsLoading(true); // Use general loading state for saving all
+    let successCount = 0;
+    for (const key in grades) {
+        const entry = grades[key];
+        if (entry.registration_id) { // Ensure we have a registration_id to link StudentAssessment
+           try {
+                await createItem('studentAssessments', entry); // This will upsert via POST
+                successCount++;
+           } catch (error) {
+               toast({title: "Error Saving Grade", description: `Could not save grade for student ID ${entry.student_id}, assessment ID ${entry.assessment_id}`, variant: "destructive"})
+           }
+        }
+    }
+    if (successCount > 0) toast({ title: "Grades Saved", description: `${successCount} grade entries processed.`});
+    setIsLoading(false);
+    loadGradebookData(); // Refresh data
   };
 
 
-  if(isLoading) return <Skeleton className="h-80 w-full" />;
+  if(isLoading && assessments.length === 0) return <Skeleton className="h-80 w-full" />;
 
   return (
-    <div className="space-y-4">
+    <Card>
+        <CardHeader><CardTitle>Gradebook</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Student</TableHead>
-            {assessments.map(a => <TableHead key={a.id}>{a.name} (/{a.max_score})</TableHead>)}
+            {assessments.map(a => <TableHead key={a.id} className="text-center">{a.name} (/{a.max_score})</TableHead>)}
           </TableRow>
         </TableHeader>
         <TableBody>
           {students.map(s => (
             <TableRow key={s.student_id}>
               <TableCell>{s.first_name} {s.last_name}</TableCell>
-              {assessments.map(a => (
-                <TableCell key={a.id}>
+              {assessments.map(a => {
+                const gradeKey = `${s.student_id}_${a.id}`;
+                const currentGradeEntry = grades[gradeKey];
+                return (
+                <TableCell key={a.id} className="text-center">
                   <Input 
                     type="number" 
                     placeholder="Score" 
-                    className="mb-1 w-20"
-                    value={grades[s.student_id]?.[a.id]?.score ?? ''}
+                    className="mb-1 w-20 mx-auto"
+                    value={currentGradeEntry?.score ?? ''}
                     onChange={e => handleGradeChange(s.student_id, a.id, 'score', e.target.value)}
                     max={a.max_score}
                   />
@@ -312,7 +368,7 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
                             placeholder="Enter feedback..." 
                             rows={5} 
                             className="mt-2"
-                            value={grades[s.student_id]?.[a.id]?.feedback ?? aiFeedback} 
+                            value={currentGradeEntry?.feedback ?? aiFeedback} 
                             onChange={e => {
                                 handleGradeChange(s.student_id, a.id, 'feedback', e.target.value);
                                 if(aiFeedback) setAiFeedback(''); 
@@ -324,13 +380,17 @@ const Gradebook = ({ scheduledCourseId, students }: { scheduledCourseId: string,
                     </DialogContent>
                   </Dialog>
                 </TableCell>
-              ))}
+              )})}
             </TableRow>
           ))}
         </TableBody>
       </Table>
-      <Button onClick={handleSaveGrades}>Save All Grades & Feedback</Button>
-    </div>
+      <Button onClick={handleSaveGrades} disabled={isLoading}>
+        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+        Save All Grades & Feedback
+        </Button>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -359,10 +419,19 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
   const calculateAndSetGradeEntries = useCallback(async () => {
     setIsLoading(true);
     try {
-      const courseAssessments = await fetchAssessmentsForCourse(`assessments?courseId=${scheduledCourseId}`) as Assessment[];
-      const studentRegistrations = await fetchStudentRegistrationsForCourseGrading(scheduledCourseId);
-      const allStudentRawScores = await fetchAllStudentAssessmentScoresForCourse(scheduledCourseId);
+      const courseAssessments = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as Assessment[];
+      const studentRegistrations = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`) as Array<{ registration_id: string, student_id: string, first_name: string, last_name: string, final_grade: string | null, grade_points: number | null}>; // API already enriches this
+      const allStudentRawScoresData = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as StudentAssessmentEntry[];
       
+      // Transform allStudentRawScoresData for easier lookup
+      const allStudentRawScores: Record<string, Record<string, { score: number | null }>> = {};
+      allStudentRawScoresData.forEach(entry => {
+          if (!allStudentRawScores[entry.student_id]) {
+              allStudentRawScores[entry.student_id] = {};
+          }
+          allStudentRawScores[entry.student_id][entry.assessment_id] = { score: entry.score };
+      });
+
       const courseTotalMaxScore = courseAssessments.reduce((sum, asm) => sum + (asm.max_score || 0), 0);
 
       const newGradeEntries = studentRegistrations.map(reg => {
@@ -382,7 +451,7 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
           if (!isFullyGraded) {
             status = 'PendingGrading';
           } else if (courseTotalMaxScore === 0) {
-            status = 'Error'; // Assessments exist but no total points
+            status = 'Error'; 
           } else {
             const studentTotalRawScore = courseAssessments.reduce((sum, asm) => {
               const scoreEntry = studentScoresForCourse[asm.id];
@@ -397,7 +466,7 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
           }
         }
         
-        const hasChanged = status === 'Calculated' && (letter_grade !== reg.current_final_grade || grade_points !== reg.current_grade_points);
+        const hasChanged = status === 'Calculated' && (letter_grade !== reg.final_grade || grade_points !== reg.grade_points);
 
         return {
           registration_id: reg.registration_id,
@@ -408,8 +477,8 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
           calculated_numeric_score: numericScore100,
           calculated_letter_grade: letter_grade,
           calculated_grade_points: grade_points,
-          original_letter_grade: reg.current_final_grade,
-          original_grade_points: reg.current_grade_points,
+          original_letter_grade: reg.final_grade,
+          original_grade_points: reg.grade_points,
           has_changed: hasChanged,
         };
       });
@@ -449,7 +518,7 @@ const FinalGradesSubmission = ({ scheduledCourseId }: { scheduledCourseId: strin
     setIsSaving(false);
     if (successCount > 0) {
       toast({ title: "Grades Saved", description: `${successCount} student grade(s) submitted successfully.` });
-      calculateAndSetGradeEntries(); // Refresh to show updated "original" grades and reset has_changed
+      calculateAndSetGradeEntries(); 
     }
     if (errorCount > 0) {
       toast({ title: "Some Grades Not Saved", description: `${errorCount} student grade(s) had issues.`, variant: "destructive" });
@@ -506,57 +575,93 @@ export default function TeacherCourseManagementPage() {
   const params = useParams();
   const scheduledCourseId = params.scheduledCourseId as string;
   const { toast } = useToast();
+  const user = useAppStore(state => state.user); // Get current user
   const [courseDetails, setCourseDetails] = useState<ScheduledCourseDetails | null>(null);
-  const [students, setStudents] = useState<Student[]>([]); // For Gradebook Roster
+  const [students, setStudents] = useState<Student[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (scheduledCourseId) {
+    if (scheduledCourseId && user?.user_id) { // Ensure user is available for permission checks if any
       const loadData = async () => {
         setIsLoading(true);
         try {
-          // Fetch course details
-          const courses = await fetchTeacherAssignedCourses("teacherId_placeholder"); 
-          const currentCourse = courses.find(c => c.scheduled_course_id === scheduledCourseId);
-          if (currentCourse) {
-            setCourseDetails(currentCourse);
+          const fetchedCourseDetails = await fetchItems('scheduledCourses', scheduledCourseId) as ScheduledCourseDetails;
+          if (fetchedCourseDetails) {
+             // Ensure the fetched course teacher_id matches the logged-in user's ID (if applicable for security)
+            // For now, directly setting details
+            setCourseDetails({
+                scheduled_course_id: fetchedCourseDetails.scheduled_course_id,
+                course_code: fetchedCourseDetails.course_code || 'N/A',
+                title: fetchedCourseDetails.title || 'N/A',
+                section: (fetchedCourseDetails as any).section_number || 'N/A', // Assuming section_number is present
+                teacher_name: fetchedCourseDetails.teacher_name,
+                semester_name: fetchedCourseDetails.semester_name,
+                room_display_name: fetchedCourseDetails.room_display_name
+            });
           } else {
             toast({title: "Error", description: "Course not found.", variant: "destructive"});
+            setCourseDetails(null); // Explicitly set to null if not found
           }
-          // Fetch student roster for the Gradebook component
+          
           const roster = await fetchStudentRoster(scheduledCourseId);
           setStudents(roster);
         } catch (error) {
           console.error("Error loading course management data:", error)
           toast({ title: "Error", description: "Failed to load course management data.", variant: "destructive" });
+          setCourseDetails(null);
         } finally {
           setIsLoading(false);
         }
       };
       loadData();
+    } else if (!user?.user_id) {
+        setIsLoading(false);
+        toast({title: "Authentication Error", description: "User not found.", variant: "destructive"});
     }
-  }, [scheduledCourseId, toast]);
+  }, [scheduledCourseId, user, toast]);
 
   if (isLoading) {
     return (
-        <div className="space-y-4">
-            <Skeleton className="h-12 w-1/2" />
-            <Skeleton className="h-8 w-1/3" />
-            <div className="grid grid-cols-5 gap-2"> 
-                <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" /> <Skeleton className="h-10 w-full" />
+        <div className="space-y-4 p-4">
+            <Skeleton className="h-12 w-3/4 md:w-1/2" />
+            <Skeleton className="h-8 w-1/2 md:w-1/3" />
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-b pb-2 mb-2"> 
+                <Skeleton className="h-10 w-full" /> 
+                <Skeleton className="h-10 w-full" /> 
+                <Skeleton className="h-10 w-full" /> 
+                <Skeleton className="h-10 w-full" /> 
+                <Skeleton className="h-10 w-full" />
             </div>
             <Skeleton className="h-96 w-full" />
         </div>
     );
   }
-  if (!courseDetails) return <p>Course details not found.</p>;
+  if (!courseDetails) {
+      return (
+        <Card className="m-4">
+            <CardHeader>
+                <CardTitle className="font-headline text-2xl text-destructive">Course Not Found</CardTitle>
+                <CardDescription>The course you are trying to manage could not be loaded. It might not exist or you may not have permission to view it.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button asChild variant="outline">
+                    <Link href="/teacher/courses">Back to My Courses</Link>
+                </Button>
+            </CardContent>
+        </Card>
+      );
+  }
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="font-headline text-2xl">Manage Course: {courseDetails.course_code} - {courseDetails.title} (Section {courseDetails.section})</CardTitle>
-          <CardDescription>Oversee students, materials, assessments, and grades for this course.</CardDescription>
+          <CardDescription>
+            Teacher: {courseDetails.teacher_name || 'N/A'} | Semester: {courseDetails.semester_name || 'N/A'} | Room: {courseDetails.room_display_name || 'N/A'}
+            <br/>
+            Oversee students, materials, assessments, and grades for this course.
+          </CardDescription>
         </CardHeader>
       </Card>
 
@@ -575,7 +680,7 @@ export default function TeacherCourseManagementPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {students.map(s => <TableRow key={s.student_id}><TableCell>{s.first_name} {s.last_name}</TableCell><TableCell>{s.email}</TableCell><TableCell><Button size="sm" variant="outline"><Eye className="mr-1 h-3 w-3"/>View Progress</Button></TableCell></TableRow>)}
+                  {students.length > 0 ? students.map(s => <TableRow key={s.student_id}><TableCell>{s.first_name} {s.last_name}</TableCell><TableCell>{s.email}</TableCell><TableCell><Button size="sm" variant="outline"><Eye className="mr-1 h-3 w-3"/>View Progress</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">No students enrolled.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
