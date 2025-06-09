@@ -8,10 +8,6 @@ export async function handleLogin(username: string, password_hash: string, role:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password: password_hash, role }),
   });
-  // if (!response.ok) { // Error handling should be done by the caller
-  //   const errorData = await response.json().catch(() => ({error: 'Login failed, server error'}));
-  //   return { success: false, error: errorData.error || 'Login failed', data: null };
-  // }
   return response.json();
 }
 
@@ -90,11 +86,7 @@ export async function updateStaffProfile(userId: string | number, data: Partial<
 
 
 // --- Generic CRUD section ---
-// Mocks for entities NOT YET migrated to API routes
 export let mockDatabases: Record<string, any[]> = {
-  // assessments: {}, // Moved to API
-  // courseMaterials: [], // Moved to API
-  // studentAssessments: [], // Moved to API
   auditLogs: [
     { id: 'log1', timestamp: new Date(Date.now() - Math.random()*100000000).toISOString(), username: 'staff1', action_type: 'USER_LOGIN', target_entity_type: 'USER', target_entity_id: 'staff1', ip_address: '192.168.1.10', details: 'User logged in successfully' },
   ],
@@ -106,7 +98,7 @@ export let mockDatabases: Record<string, any[]> = {
 
 
 export async function fetchItems(entityOrQuery: string, id?: string | number, filters?: any) {
-  console.log(`Fetching ${entityOrQuery}${id ? `/${id}` : ''} with filters:`, filters);
+  // console.log(`Fetching ${entityOrQuery}${id ? `/${id}` : ''} with filters:`, filters);
   
   const entityToApiMap: Record<string, string> = {
     'users': '/api/users',
@@ -131,7 +123,6 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
     queryParamsString = query;
   }
 
-
   let apiUrl = entityToApiMap[entityName];
 
   if (apiUrl) {
@@ -146,15 +137,18 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
     }
 
     const response = await fetch(apiUrl);
-    if (!response.ok) throw new Error(`Failed to fetch ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}`);
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: `API request failed for ${entityOrQuery} with status ${response.status}` }));
+        console.error(`Error fetching ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}, Message: ${errorData.message}`);
+        throw new Error(errorData.message || `Failed to fetch ${entityOrQuery}. Status: ${response.status}`);
+    }
     return response.json();
   }
   
-  // Fallback to mockDatabases for entities NOT YET migrated
   if (mockDatabases[entityOrQuery]) {
     return JSON.parse(JSON.stringify(mockDatabases[entityOrQuery]));
   }
-   if (entityOrQuery === 'teachers') { // This can also use the /api/users?role=Teacher
+   if (entityOrQuery === 'teachers') { 
     const response = await fetch('/api/users?role=Teacher');
     if (!response.ok) throw new Error('Failed to fetch teachers');
     const allUsers = await response.json();
@@ -166,8 +160,8 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
 }
 
 
-export async function createItem(entity: string, data: any) {
-  console.log(`Creating ${entity}:`, data);
+export async function createItem(entity: string, data: any): Promise<{ success: boolean, data?: any, error?: string }> {
+  // console.log(`Creating ${entity}:`, data);
 
   const entityToApiMap: Record<string, string> = {
     'users': '/api/users',
@@ -189,10 +183,13 @@ export async function createItem(entity: string, data: any) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    // if (!response.ok) { // Caller should handle non-ok based on returned JSON
+    //   const errorData = await response.json().catch(() => ({ error: `Failed to create ${entity}. Server error.` }));
+    //   return { success: false, error: errorData.error || errorData.message || `Failed to create ${entity}.` };
+    // }
     return response.json();
   }
   
-  // Fallback to direct mock manipulation for entities NOT YET migrated
   await new Promise(resolve => setTimeout(resolve, 100)); 
   let newItem = { ...data };
   const idKey = entity === 'announcements' ? 'announcement_id' : 'id';
@@ -208,7 +205,6 @@ export async function createItem(entity: string, data: any) {
      newItem.updated_at = new Date().toISOString();
   }
 
-
   if (mockDatabases[entity]) {
     mockDatabases[entity].push(newItem);
   } else {
@@ -216,11 +212,11 @@ export async function createItem(entity: string, data: any) {
     if (!mockDatabases[entity]) mockDatabases[entity] = [];
     mockDatabases[entity].push(newItem);
   }
-  return { success: true, data: newItem, error: null };
+  return { success: true, data: newItem };
 }
 
-export async function updateItem(entity: string, id: string | number, data: any) {
-  console.log(`Updating ${entity} ${id}:`, data);
+export async function updateItem(entity: string, id: string | number, data: any): Promise<{ success: boolean, data?: any, error?: string }> {
+  // console.log(`Updating ${entity} ${id}:`, data);
 
   const entityToApiMap: Record<string, string> = {
     'users': `/api/users/${id}`,
@@ -233,19 +229,31 @@ export async function updateItem(entity: string, id: string | number, data: any)
     'registrations': `/api/registrations/${id}`,
     'assessments': `/api/assessments/${id}`,
     'courseMaterials': `/api/courseMaterials/${id}`,
-    // StudentAssessments are usually created/updated via POST due to composite key nature or upsert logic
+    'studentAssessments': `/api/studentAssessments`, // Assuming PUT to base for upsert by composite key in body
   };
+  
+  let apiUrl = entityToApiMap[entity];
+  let method = 'PUT';
 
-  if (entityToApiMap[entity]) {
-    const response = await fetch(entityToApiMap[entity], {
-      method: 'PUT',
+  if (entity === 'studentAssessments') { // Special handling for studentAssessments, usually an upsert
+    method = 'POST'; // Or PUT if your API expects PUT for upsert to the base URL
+    apiUrl = '/api/studentAssessments'; // Does not use ID in URL for upsert
+  }
+
+
+  if (apiUrl) {
+    const response = await fetch(apiUrl, {
+      method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    // if (!response.ok) {
+    //   const errorData = await response.json().catch(() => ({ error: `Failed to update ${entity}. Server error.` }));
+    //   return { success: false, error: errorData.error || errorData.message || `Failed to update ${entity}.` };
+    // }
     return response.json();
   }
 
-  // Fallback to direct mock manipulation
   await new Promise(resolve => setTimeout(resolve, 100));
   let itemUpdated = false;
   let updatedItemData = null;
@@ -259,12 +267,12 @@ export async function updateItem(entity: string, id: string | number, data: any)
       itemUpdated = true;
     }
   } 
-  if (!itemUpdated) return { success: false, error: "Item not found", data: null };
-  return { success: true, data: updatedItemData, error: null};
+  if (!itemUpdated) return { success: false, error: "Item not found" };
+  return { success: true, data: updatedItemData };
 }
 
-export async function deleteItem(entity: string, id: string | number) {
-  console.log(`Deleting ${entity} ${id}`);
+export async function deleteItem(entity: string, id: string | number): Promise<{ success: boolean, message?: string, error?: string }> {
+  // console.log(`Deleting ${entity} ${id}`);
   
   const entityToApiMap: Record<string, string> = {
     'users': `/api/users/${id}`,
@@ -277,30 +285,32 @@ export async function deleteItem(entity: string, id: string | number) {
     'registrations': `/api/registrations/${id}`,
     'assessments': `/api/assessments/${id}`,
     'courseMaterials': `/api/courseMaterials/${id}`,
-    // StudentAssessments might need specific delete logic or be handled by cascade if in DB
   };
 
   if (entityToApiMap[entity]) {
     const response = await fetch(entityToApiMap[entity], { method: 'DELETE' });
+    // if (!response.ok) {
+    //   const errorData = await response.json().catch(() => ({ error: `Failed to delete ${entity}. Server error.` }));
+    //   return { success: false, error: errorData.error || errorData.message || `Failed to delete ${entity}.` };
+    // }
     return response.json();
   }
 
-  // Fallback to direct mock manipulation
   await new Promise(resolve => setTimeout(resolve, 100));
   const idKey = entity === 'announcements' ? 'announcement_id' : 'id';
 
   if (mockDatabases[entity]) {
     const initialLength = mockDatabases[entity].length;
     mockDatabases[entity] = mockDatabases[entity].filter((item: any) => String(item[idKey]) !== String(id));
-    if (mockDatabases[entity].length < initialLength) return { success: true };
+    if (mockDatabases[entity].length < initialLength) return { success: true, message: 'Item deleted from mock.' };
   }
-  return { success: false, error: "Item not found" };
+  return { success: false, error: "Item not found in mock" };
 }
 
 // --- Specific fetch functions (some now use API routes, some still MOCK or need API route migration) ---
 
 export async function fetchAvailableCourses(filters?: any) {
-  console.log('Fetching available courses with filters:', filters);
+  // console.log('Fetching available courses with filters:', filters);
   
   let queryString = '';
   if (filters) {
@@ -310,12 +320,7 @@ export async function fetchAvailableCourses(filters?: any) {
     queryString = params.toString();
   }
 
-  const response = await fetch(`/api/scheduledCourses${queryString ? `?${queryString}` : ''}`);
-  if (!response.ok) {
-      console.error("Failed to fetch available courses from API");
-      return [];
-  }
-  const scheduledCoursesFromApi = await response.json();
+  const scheduledCoursesFromApi = await fetchItems(`scheduledCourses${queryString ? `?${queryString}` : ''}`);
 
   return scheduledCoursesFromApi.map((sc: any) => ({
       id: sc.scheduled_course_id, 
@@ -335,30 +340,19 @@ export async function fetchAvailableCourses(filters?: any) {
 
 
 export async function handleRegisterCourse(scheduledCourseId: string, studentId: string | number) { 
-  console.log(`Registering student ${studentId} for course:`, scheduledCourseId);
-  const response = await fetch('/api/registrations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: studentId, scheduled_course_id: scheduledCourseId }),
-  });
-  return response.json();
+  // console.log(`Registering student ${studentId} for course:`, scheduledCourseId);
+  return createItem('registrations', { student_id: studentId, scheduled_course_id: scheduledCourseId });
 }
 
 export async function handleDropCourse(registrationId: string) {
-  console.log('Dropping course registration:', registrationId);
-  const response = await fetch(`/api/registrations/${registrationId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'Dropped' }),
-  });
-  return response.json();
+  // console.log('Dropping course registration:', registrationId);
+  // Instead of DELETE, we update status to 'Dropped'
+  return updateItem('registrations', registrationId, { status: 'Dropped' });
 }
 
 export async function fetchStudentRegisteredCourses(studentId: string | number) {
-  console.log('Fetching registered courses for student:', studentId);
-  const response = await fetch(`/api/registrations?studentId=${studentId}`);
-  if (!response.ok) throw new Error('Failed to fetch student registered courses');
-  const registrations = await response.json();
+  // console.log('Fetching registered courses for student:', studentId);
+  const registrations = await fetchItems(`registrations?studentId=${studentId}`);
   return registrations.map((reg: any) => ({
       registrationId: reg.registration_id,
       scheduledCourseId: reg.scheduled_course_id,
@@ -371,12 +365,12 @@ export async function fetchStudentRegisteredCourses(studentId: string | number) 
 
 
 export async function fetchStudentCourseMaterials(scheduledCourseId: string) {
-  console.log('Fetching course materials for:', scheduledCourseId);
+  // console.log('Fetching course materials for:', scheduledCourseId);
   return fetchItems(`courseMaterials?scheduledCourseId=${scheduledCourseId}`);
 }
 
-export async function fetchStudentAssessments(scheduledCourseId: string, studentId: string | number) {
-    console.log('Fetching assessments and scores for student:', studentId, 'in course:', scheduledCourseId);
+export async function fetchStudentAssessments(studentId: string | number, scheduledCourseId: string) {
+    // console.log('Fetching assessments and scores for student:', studentId, 'in course:', scheduledCourseId);
     
     const courseAssessments = await fetchItems(`assessments?scheduledCourseId=${scheduledCourseId}`) as any[];
     
@@ -391,23 +385,28 @@ export async function fetchStudentAssessments(scheduledCourseId: string, student
     return courseAssessments.map(asm => {
         const scoreEntry = studentScores.find(sc => String(sc.assessment_id) === String(asm.id));
         return {
-            assessment_id: asm.id, // ensure this matches the DisplayableAssessment interface
+            // From Assessment
+            id: asm.id, 
             name: asm.name,
-            max_score: asm.max_score,
-            due_date: asm.due_date, // Include other fields from Assessment type
-            type: asm.type,
             description: asm.description,
-            scheduled_course_id: asm.scheduled_course_id,
+            max_score: asm.max_score,
+            due_date: asm.due_date,
+            type: asm.type,
+            scheduled_course_id: asm.scheduledCourseId, // Ensure this field is present if Assessment type has it
+            // From StudentAssessmentEntry
+            student_assessment_id: scoreEntry?.student_assessment_id,
+            registration_id: scoreEntry?.registration_id, 
+            assessment_id: asm.id, //
             student_score: scoreEntry?.score ?? null,
             student_feedback: scoreEntry?.feedback ?? null,
+            submission_timestamp: scoreEntry?.submission_timestamp,
+            graded_at: scoreEntry?.graded_at,
         };
     });
 }
 
 export async function fetchAcademicHistory(studentId: string | number) {
-  console.log('Fetching academic history for student:', studentId);
-  // This remains a complex mock as it requires significant data joining.
-  // In a real app, this would be a dedicated API endpoint.
+  // console.log('Fetching academic history for student:', studentId);
   await new Promise(resolve => setTimeout(resolve, 100));
     const coursesSem1Year1 = [ { course_code: 'CS101', title: 'Intro to Programming', credits: 3, final_grade: 'A', grade_points: 12.0 }, { course_code: 'MA101', title: 'Calculus I', credits: 4, final_grade: 'B+', grade_points: 13.2 }, ];
   const totalCreditsSem1Year1 = coursesSem1Year1.reduce((sum, c) => sum + c.credits, 0);
@@ -435,12 +434,10 @@ export async function fetchAcademicHistory(studentId: string | number) {
 }
 
 export async function fetchTeacherAssignedCourses(teacherId: string | number, semesterId?: string | number) {
-    console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
+    // console.log('Fetching assigned courses for teacher:', teacherId, 'semester:', semesterId);
     let apiUrl = `/api/scheduledCourses`; 
     
-    const response = await fetch(apiUrl);
-    if (!response.ok) throw new Error('Failed to fetch teacher assigned courses');
-    const allScheduledCourses = await response.json();
+    const allScheduledCourses = await fetchItems(apiUrl);
 
     return allScheduledCourses
       .filter((sc: any) => String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true))
@@ -449,7 +446,6 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
           course_code: sc.course_code || 'N/A', 
           title: sc.title || 'N/A', 
           section: sc.section_number,
-          // Include other enriched details if the manage page needs them directly
           teacher_name: sc.teacher_name,
           semester_name: sc.semester_name,
           room_display_name: sc.room_display_name,
@@ -457,10 +453,8 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
 }
 
 export async function fetchStudentRoster(scheduledCourseId: string): Promise<Array<{ student_id: string; first_name: string; last_name: string; email: string; }>> {
-    console.log('Fetching student roster for course:', scheduledCourseId);
-    const response = await fetch(`/api/registrations?scheduledCourseId=${scheduledCourseId}`);
-    if (!response.ok) throw new Error(`Failed to fetch student roster for course ${scheduledCourseId}`);
-    const registrations = await response.json();
+    // console.log('Fetching student roster for course:', scheduledCourseId);
+    const registrations = await fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`);
     return registrations.map((reg: any) => ({
         student_id: reg.student_id,
         first_name: reg.first_name,
@@ -470,20 +464,18 @@ export async function fetchStudentRoster(scheduledCourseId: string): Promise<Arr
 }
 
 export async function createCourseMaterial(scheduledCourseId: string, materialData: any) {
-    console.log('Creating course material for course:', scheduledCourseId, 'data:', materialData);
+    // console.log('Creating course material for course:', scheduledCourseId, 'data:', materialData);
     return createItem('courseMaterials', { ...materialData, scheduled_course_id: scheduledCourseId });
 }
 
 export async function fetchStudentRegistrationsForCourseGrading(scheduledCourseId: string): Promise<Array<{ registration_id: string; student_id: string; first_name: string; last_name: string; email: string; final_grade: string | null; grade_points: number | null;}>> {
-  console.log('Fetching student registrations for grading, course:', scheduledCourseId);
-  const response = await fetch(`/api/registrations?scheduledCourseId=${scheduledCourseId}`);
-  if (!response.ok) throw new Error('Failed to fetch registrations for grading');
-  return response.json(); 
+  // console.log('Fetching student registrations for grading, course:', scheduledCourseId);
+  return fetchItems(`registrations?scheduledCourseId=${scheduledCourseId}`); 
 }
 
 export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId: string): Promise<Record<string, Record<string, { score: number | null; feedback: string | null }>>> {
-  console.log('Fetching all student assessment scores for course:', scheduledCourseId);
-  const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as StudentAssessmentEntry[];
+  // console.log('Fetching all student assessment scores for course:', scheduledCourseId);
+  const studentEntries = await fetchItems(`studentAssessments?scheduledCourseId=${scheduledCourseId}`) as any[]; // StudentAssessmentEntry[]
   
   const scoresMap: Record<string, Record<string, { score: number | null; feedback: string | null }>> = {};
   studentEntries.forEach(entry => {
@@ -496,30 +488,19 @@ export async function fetchAllStudentAssessmentScoresForCourse(scheduledCourseId
 }
 
 export async function fetchAuditLogs(filters?: any) {
-    console.log('Fetching audit logs with filters:', filters);
-    // TODO: Migrate to /api/audit-logs
+    // console.log('Fetching audit logs with filters:', filters);
     await new Promise(resolve => setTimeout(resolve, 100));
     const limit = filters?.limit || 50;
     return mockDatabases.auditLogs.slice(0, limit);
 }
 
 export async function handleManualStudentRegistration(studentId: string, scheduledCourseId: string) {
-  console.log(`Manually registering student ${studentId} for scheduled course ${scheduledCourseId}`);
-  const response = await fetch('/api/registrations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-        student_id: studentId, 
-        scheduled_course_id: scheduledCourseId, 
-        manualOverride: true 
-    }),
-  });
-  return response.json();
+  // console.log(`Manually registering student ${studentId} for scheduled course ${scheduledCourseId}`);
+  return createItem('registrations', { student_id: studentId, scheduled_course_id: scheduledCourseId, manualOverride: true });
 }
 
 export async function fetchAnnouncements({ role, departmentId }: { role: UserRole, departmentId?: string | number }) {
-  console.log(`Fetching announcements for role: ${role}, departmentId: ${departmentId}`);
-  // TODO: Migrate to /api/announcements with query params for role/dept
+  // console.log(`Fetching announcements for role: ${role}, departmentId: ${departmentId}`);
   await new Promise(resolve => setTimeout(resolve, 100));
   const now = new Date();
   const publishedAnnouncements = mockDatabases.announcements.filter((ann:any) => ann.status === 'Published' && new Date(ann.publish_date) <= now);
@@ -537,9 +518,8 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
   return relevantAnnouncements;
 }
 
-// Specific function for Teacher's Gradebook component to save/update student assessment scores
-// This will call POST to /api/studentAssessments, which handles upsert.
 export async function saveStudentAssessmentEntry(entry: { registration_id: string; assessment_id: string; score: number | null; feedback: string | null; student_id: string; }) {
-    console.log('Saving student assessment entry:', entry);
-    return createItem('studentAssessments', entry); // createItem for 'studentAssessments' maps to POST /api/studentAssessments
+    // console.log('Saving student assessment entry:', entry);
+    // This function will now make a POST request to /api/studentAssessments which handles upsert.
+    return createItem('studentAssessments', entry); 
 }
