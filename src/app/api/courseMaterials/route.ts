@@ -1,8 +1,7 @@
 
-// src/app/api/courseMaterials/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 
-// START: Embedded data structures (replacing import from './data')
+// START: Embedded data structures
 export interface CourseMaterial {
   id: string;
   title: string;
