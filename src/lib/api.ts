@@ -139,8 +139,8 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
     const response = await fetch(apiUrl);
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: `API request failed for ${entityOrQuery} with status ${response.status}` }));
-        console.error(`Error fetching ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}, Message: ${errorData.message}`);
-        throw new Error(errorData.message || `Failed to fetch ${entityOrQuery}. Status: ${response.status}`);
+        console.error(`Error fetching ${entityOrQuery} from API at ${apiUrl}. Status: ${response.status}, Message: ${errorData.message || errorData.error}`);
+        throw new Error(errorData.message || errorData.error || `Failed to fetch ${entityOrQuery}. Status: ${response.status}`);
     }
     return response.json();
   }
@@ -148,8 +148,8 @@ export async function fetchItems(entityOrQuery: string, id?: string | number, fi
   if (mockDatabases[entityOrQuery]) {
     return JSON.parse(JSON.stringify(mockDatabases[entityOrQuery]));
   }
-   if (entityOrQuery === 'teachers') { 
-    const response = await fetch('/api/users?role=Teacher');
+   if (entityOrQuery === 'teachers') { // This specific case might still be needed if /api/users doesn't support role filtering well enough
+    const response = await fetch('/api/users?role=Teacher'); // Assuming /api/users can filter by role (it should)
     if (!response.ok) throw new Error('Failed to fetch teachers');
     const allUsers = await response.json();
     return allUsers.filter((user: UserProfile) => user.role === 'Teacher')
@@ -183,10 +183,6 @@ export async function createItem(entity: string, data: any): Promise<{ success: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    // if (!response.ok) { // Caller should handle non-ok based on returned JSON
-    //   const errorData = await response.json().catch(() => ({ error: `Failed to create ${entity}. Server error.` }));
-    //   return { success: false, error: errorData.error || errorData.message || `Failed to create ${entity}.` };
-    // }
     return response.json();
   }
   
@@ -229,15 +225,15 @@ export async function updateItem(entity: string, id: string | number, data: any)
     'registrations': `/api/registrations/${id}`,
     'assessments': `/api/assessments/${id}`,
     'courseMaterials': `/api/courseMaterials/${id}`,
-    'studentAssessments': `/api/studentAssessments`, // Assuming PUT to base for upsert by composite key in body
+    'studentAssessments': `/api/studentAssessments`, 
   };
   
   let apiUrl = entityToApiMap[entity];
   let method = 'PUT';
 
-  if (entity === 'studentAssessments') { // Special handling for studentAssessments, usually an upsert
-    method = 'POST'; // Or PUT if your API expects PUT for upsert to the base URL
-    apiUrl = '/api/studentAssessments'; // Does not use ID in URL for upsert
+  if (entity === 'studentAssessments') { 
+    method = 'POST'; 
+    apiUrl = '/api/studentAssessments'; 
   }
 
 
@@ -247,10 +243,6 @@ export async function updateItem(entity: string, id: string | number, data: any)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    // if (!response.ok) {
-    //   const errorData = await response.json().catch(() => ({ error: `Failed to update ${entity}. Server error.` }));
-    //   return { success: false, error: errorData.error || errorData.message || `Failed to update ${entity}.` };
-    // }
     return response.json();
   }
 
@@ -289,10 +281,6 @@ export async function deleteItem(entity: string, id: string | number): Promise<{
 
   if (entityToApiMap[entity]) {
     const response = await fetch(entityToApiMap[entity], { method: 'DELETE' });
-    // if (!response.ok) {
-    //   const errorData = await response.json().catch(() => ({ error: `Failed to delete ${entity}. Server error.` }));
-    //   return { success: false, error: errorData.error || errorData.message || `Failed to delete ${entity}.` };
-    // }
     return response.json();
   }
 
@@ -346,7 +334,6 @@ export async function handleRegisterCourse(scheduledCourseId: string, studentId:
 
 export async function handleDropCourse(registrationId: string) {
   // console.log('Dropping course registration:', registrationId);
-  // Instead of DELETE, we update status to 'Dropped'
   return updateItem('registrations', registrationId, { status: 'Dropped' });
 }
 
@@ -379,24 +366,23 @@ export async function fetchStudentAssessments(studentId: string | number, schedu
 
     let studentScores: any[] = [];
     if (currentRegistration) {
+        // Fetch scores specifically for this registration (student in this specific course instance)
         studentScores = await fetchItems(`studentAssessments?registrationId=${currentRegistration.registration_id}`) as any[];
     }
     
     return courseAssessments.map(asm => {
         const scoreEntry = studentScores.find(sc => String(sc.assessment_id) === String(asm.id));
         return {
-            // From Assessment
             id: asm.id, 
             name: asm.name,
             description: asm.description,
             max_score: asm.max_score,
             due_date: asm.due_date,
             type: asm.type,
-            scheduled_course_id: asm.scheduledCourseId, // Ensure this field is present if Assessment type has it
-            // From StudentAssessmentEntry
+            scheduled_course_id: asm.scheduledCourseId, 
             student_assessment_id: scoreEntry?.student_assessment_id,
             registration_id: scoreEntry?.registration_id, 
-            assessment_id: asm.id, //
+            assessment_id: asm.id, 
             student_score: scoreEntry?.score ?? null,
             student_feedback: scoreEntry?.feedback ?? null,
             submission_timestamp: scoreEntry?.submission_timestamp,
@@ -440,7 +426,7 @@ export async function fetchTeacherAssignedCourses(teacherId: string | number, se
     const allScheduledCourses = await fetchItems(apiUrl);
 
     return allScheduledCourses
-      .filter((sc: any) => String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true))
+      .filter((sc: any) => sc.teacher_id && String(sc.teacher_id) === String(teacherId) && (semesterId ? String(sc.semester_id) === String(semesterId) : true))
       .map((sc: any) => ({ 
           scheduled_course_id: sc.scheduled_course_id, 
           course_code: sc.course_code || 'N/A', 
@@ -520,6 +506,5 @@ export async function fetchAnnouncements({ role, departmentId }: { role: UserRol
 
 export async function saveStudentAssessmentEntry(entry: { registration_id: string; assessment_id: string; score: number | null; feedback: string | null; student_id: string; }) {
     // console.log('Saving student assessment entry:', entry);
-    // This function will now make a POST request to /api/studentAssessments which handles upsert.
     return createItem('studentAssessments', entry); 
 }
