@@ -8,11 +8,12 @@ import { roomsStore } from '../rooms/data';   // Assuming roomsStore contains bu
 
 export async function GET(request: NextRequest) {
   try {
-    // TEMPORARY: Return raw store for debugging teacher course assignment
-    // console.log("API GET /api/scheduledCourses returning raw store:", JSON.stringify(scheduledCoursesStore, null, 2));
+    // For now, return the raw store to ensure teacher_id is present for filtering
+    // The enrichment can be re-enabled once the basic filtering is confirmed working.
+    // console.log("API GET /api/scheduledCourses returning raw store for teacher course assignment debug:", JSON.stringify(scheduledCoursesStore, null, 2));
     return NextResponse.json(scheduledCoursesStore);
-
-    // Original enrichment logic (commented out for now)
+    
+    // Original enrichment logic:
     /*
     const enrichedScheduledCourses = scheduledCoursesStore.map(sc => {
         const course = coursesStore.find(c => String(c.id) === String(sc.course_id));
@@ -81,3 +82,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: 'Error creating scheduled course', error: errorMessage }, { status: 500 });
   }
 }
+
